@@ -1,0 +1,14 @@
+{
+    "name": "bundler",
+    "version": "1.0.0",
+    "type": "module",
+    "description": "bundler",
+    "main": "bundler.js",
+    "scripts": {
+        "bundle": "node bundler.js",
+        "test": "node tester.js"
+    },
+    "dependencies": {
+        "@hyperjump/json-schema": "^1.6.5"
+    }
+}

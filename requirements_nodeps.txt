@@ -1,0 +1,2 @@
+# Pin to this commit as later commits revert to pydantic v1
+pygeoapi @ git+https://github.com/geopython/pygeoapi.git@024844d24408c200b86040b0d03b10f05633dc29
