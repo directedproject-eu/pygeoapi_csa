@@ -1,12 +1,30 @@
-import os
+# =================================================================
+# Copyright (C) 2024 by 52 North Spatial Information Research GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# =================================================================
+import inspect
+import os.path
 from functools import wraps
 
 from flask import Flask, request
 from pygeoapi import flask_app
-from pygeoapi.flask_app import STATIC_FOLDER, API_RULES, CONFIG, api_, OPENAPI
+from pygeoapi.flask_app import API_RULES, CONFIG, api_, OPENAPI
 from cs_api import *
 
-APP = Flask(__name__, static_folder=STATIC_FOLDER, static_url_path='/static')
+APP = Flask(__name__,
+            static_folder=os.path.join(os.path.dirname(inspect.getmodule(api_).__file__), "static"),
+            static_url_path='/static')
 APP.url_map.strict_slashes = API_RULES.strict_slashes
 APP.config['JSONIFY_PRETTYPRINT_REGULAR'] = CONFIG['server'].get('pretty_print', True)
 
