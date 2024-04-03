@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # =================================================================
+import jsonschema
 from pygeoapi.api import *
 from pygeoapi.provider.base import ProviderInvalidDataError, ProviderItemNotFoundError
 
@@ -699,13 +700,13 @@ class CSAPI(API):
                     if "parent" in elem:
                         elem["parent"] = None
 
-        except Exception as ex:
+        except jsonschema.exceptions.ValidationError as ex:
             return self.get_exception(
                 HTTPStatus.BAD_REQUEST,
                 headers,
                 request.format,
                 'InvalidParameterValue',
-                ex)
+                ex.message)
 
         try:
             # passthru to provider
