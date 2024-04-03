@@ -17,6 +17,7 @@ import asyncio
 import datetime
 import json
 import logging
+import uuid
 from typing import Dict, List, Union, Coroutine
 
 from elastic_transport import NodeConfig
@@ -35,13 +36,13 @@ LOGGER = logging.getLogger(__name__)
 
 def parse_common_params(query: Search, parameters: CommonParams) -> Search:
     # Parse dateTime filter
-    if parameters.datetimeStart and parameters.datetimeEnd:
-        query = query.filter("range", validTime={"gte": parameters.datetimeStart.isoformat(),
-                                                 "lte": parameters.datetimeEnd.isoformat()})
-    if parameters.datetimeStart:
-        query = query.filter("range", validTime={"gte": parameters.datetimeStart.isoformat()})
-    if parameters.datetimeEnd:
-        query = query.filter("range", validTime={"lte": parameters.datetimeEnd.isoformat()})
+    if parameters.datetime_start() and parameters.datetime_end():
+        query = query.filter("range", validTime={"gte": parameters.datetime_start().isoformat(),
+                                                 "lte": parameters.datetime_end().isoformat()})
+    if parameters.datetime_start():
+        query = query.filter("range", validTime={"gte": parameters.datetime_start().isoformat()})
+    if parameters.datetime_end():
+        query = query.filter("range", validTime={"lte": parameters.datetime_end().isoformat()})
 
     if parameters.foi:
         LOGGER.critical("not implemented!")
@@ -213,8 +214,6 @@ class ConnectedSystemsESProvider(ConnectedSystemsBaseProvider):
                           (self.samplingfeatures_index_name, self.samplingfeatures_mappings),
                           ]:
                 index_name, index_mapping = index
-                # TODO: Debug only!
-                await self.es.options(ignore_status=[400, 404]).indices.delete(index=index_name)
                 if not await (self.es.indices.exists(index=index_name)):
                     await self.es.indices.create(
                         index=index_name,
@@ -468,7 +467,7 @@ class ConnectedSystemsESProvider(ConnectedSystemsBaseProvider):
         return await self._search(self.properties_index_name, query.to_dict(), parameters)
 
     async def _search(self, index: str, body: Dict, parameters: CSAParams) -> CSAGetResponse:
-        # TODO: refactor to be able to access elements above index 10.000
+        # Select appropriate strategy here: For collections >10k elements search_after must be used
         found = (await self.es.search(body=body, index=index, size=parameters.limit))["hits"]
 
         if found["total"]["value"] > 0:

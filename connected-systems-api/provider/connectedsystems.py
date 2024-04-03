@@ -13,12 +13,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # =================================================================
-from datetime import datetime
+from dataclasses import dataclass
 from typing import List, Optional, Dict, Tuple
+from datetime import datetime
 
 from pygeoapi.provider.base import ProviderInvalidQueryError
 
 
+class BBoxParam:
+    bbox: Optional[Dict] = None
+
+
+class GeomParam:
+    geom: Optional[str] = None
+
+
+@dataclass(slots=True)
 class CSAParams:
     f: str = None  # format
     id: List[str] = None
@@ -30,70 +40,61 @@ class CSAParams:
         return [name for name in dir(self) if not name.startswith('_')]
 
 
+@dataclass(slots=True)
 class CommonParams(CSAParams):
-    datetimeStart: Optional[datetime] = None
-    datetimeEnd: Optional[datetime] = None
+    datetime: Tuple[Optional[datetime], Optional[datetime]] = None
     foi: Optional[List[str]] = None
     observedProperty: Optional[List[str]] = None
 
-    def parameters(self):
-        return super().parameters() + ["datetime"]
+    def datetime_start(self):
+        return self.datetime[0] if self.datetime else None
+
+    def datetime_end(self):
+        return self.datetime[1] if self.datetime else None
 
 
-class CollectionParams(CSAParams):
-    datetimeStart: Optional[datetime] = None
-    datetimeEnd: Optional[datetime] = None
-    bbox: Optional[Dict] = None
-    geom: Optional[str] = None
-
-    def parameters(self):
-        return super().parameters() + ["datetime"]
+@dataclass(slots=True)
+class CollectionParams(CSAParams, BBoxParam, GeomParam):
+    datetime: Tuple[Optional[datetime], Optional[datetime]] = None
 
 
-class SystemsParams(CommonParams):
-    bbox: Optional[Dict] = None
-    geom: Optional[str] = None
+@dataclass(slots=True)
+class SystemsParams(CommonParams, BBoxParam, GeomParam):
     parent: Optional[List[str]] = None
     procedure: Optional[List[str]] = None
     controlledProperty: Optional[List[str]] = None
 
 
-class DeploymentsParams(CommonParams):
-    bbox: Optional[Dict] = None
-    geom: Optional[str] = None
+@dataclass(slots=True)
+class DeploymentsParams(CommonParams, BBoxParam, GeomParam):
     system: Optional[List[str]] = None
 
 
+@dataclass(slots=True)
 class ProceduresParams(CommonParams):
     controlledProperty: Optional[List[str]] = None
 
 
-class SamplingFeaturesParams(CommonParams):
-    bbox: Optional[Dict] = None
-    geom: Optional[str] = None
+@dataclass(slots=True)
+class SamplingFeaturesParams(CommonParams, BBoxParam, GeomParam):
     controlledProperty: Optional[List[str]] = None
     system: Optional[List[str]] = None
 
 
+@dataclass(slots=True)
 class DatastreamsParams(CommonParams):
-    phenomenonTimeStart: Optional[datetime] = None
-    phenomenonTimeEnd: Optional[datetime] = None
-    resultTimeStart: Optional[datetime] = None
-    resultTimeEnd: Optional[datetime] = None
+    phenomenonTime: Tuple[Optional[datetime], Optional[datetime]] = None
+    resultTime: Tuple[Optional[datetime], Optional[datetime]] = None
     system: Optional[List[str]] = None
     schema: Optional[bool] = None
 
 
+@dataclass(slots=True)
 class ObservationsParams(CommonParams):
-    phenomenonTimeStart: Optional[datetime] = None
-    phenomenonTimeEnd: Optional[datetime] = None
-    resultTimeStart: Optional[datetime] = None
-    resultTimeEnd: Optional[datetime] = None
+    phenomenonTime: Tuple[Optional[datetime], Optional[datetime]] = None
+    resultTime: Tuple[Optional[datetime], Optional[datetime]] = None
     system: Optional[List[str]] = None
     datastream: Optional[str] = None
-
-    def parameters(self):
-        return super().parameters() + ["phenomenonTime", "resultTime"]
 
 
 def parse_query_parameters(out_parameters: CSAParams, input_parameters: Dict):
@@ -115,8 +116,7 @@ def parse_query_parameters(out_parameters: CSAParams, input_parameters: Dict):
                 date = datetime.utcnow()
             else:
                 date = datetime.fromisoformat(val)
-            setattr(out_parameters, key + "Start", date)
-            setattr(out_parameters, key + "End", date)
+            setattr(out_parameters, key, (date, date))
 
     def _parse_bbox(key):
         split = input_parameters.get("bbox").split(',')
@@ -144,34 +144,34 @@ def parse_query_parameters(out_parameters: CSAParams, input_parameters: Dict):
 
     def _parse_time_interval(key):
         raw = input_parameters.get(key)
-        start = key + "Start"
-        end = key + "End"
         # TODO: Support 'latest' qualifier
         now = datetime.utcnow()
+        start, end = None
         if "/" in raw:
             # time interval
             split = raw.split("/")
             startts = split[0]
             endts = split[1]
             if startts == "now":
-                setattr(out_parameters, start, now)
+                start = now
             elif startts == "..":
-                setattr(out_parameters, start, None)
+                start = None
             else:
-                setattr(out_parameters, start, datetime.fromisoformat(startts))
+                start = datetime.fromisoformat(startts)
             if endts == "now":
-                setattr(out_parameters, end, now)
+                end = now
             elif endts == "..":
-                setattr(out_parameters, end, None)
+                end = None
             else:
-                setattr(out_parameters, end, datetime.fromisoformat(endts))
+                end = datetime.fromisoformat(endts)
         else:
             if raw == "now":
-                setattr(out_parameters, start, now)
-                setattr(out_parameters, end, now)
+                start = now
+                end = now
             else:
-                setattr(out_parameters, start, raw)
-                setattr(out_parameters, end, raw)
+                start = raw
+                end = raw
+        setattr(out_parameters, key, (start, end))
 
     parser = {
         "id": _parse_list,
@@ -194,6 +194,7 @@ def parse_query_parameters(out_parameters: CSAParams, input_parameters: Dict):
         "resultTime": _parse_time_interval,
     }
 
+    #  TODO: There must be a way to make this more efficient/straightforward..
     # Iterate possible parameters
     for p in input_parameters:
         # Check if parameter is supplied as input
