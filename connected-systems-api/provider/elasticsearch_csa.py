@@ -501,7 +501,15 @@ class ConnectedSystemsESProvider(ConnectedSystemsBaseProvider):
                 raise ProviderGenericError(f"unrecognized type: {type}")
 
             # add to ES if not already present
-            routines[index] = self._create_if_not_exists(index_name, item, item["id"])
+
+            identifier = None
+            if "id" not in item:
+                identifier = str(uuid.uuid4())
+                item["id"] = identifier
+            else:
+                identifier = item["id"]
+
+            routines[index] = self._create_if_not_exists(index_name, item, identifier)
 
         # wait for completion
         await asyncio.gather(*routines)

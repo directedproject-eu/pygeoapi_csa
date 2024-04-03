@@ -530,48 +530,6 @@ class CSAPI(API):
 
     @gzip
     @pre_process
-    def _handle_csa_post(
-            self,
-            request: Union[APIRequest, Any],
-            collection_name: str,
-            path: Union[Tuple[str, str], None] = None,
-    ) -> Tuple[dict, int, str]:
-        if self.connected_system_provider is None:
-            # TODO: what to return here?
-            raise NotImplementedError()
-
-        # TODO: validate that POST is supported by provider
-        # TODO: check format
-        headers = request.get_response_headers(**self.api_headers)
-        entities = json.loads(request.data)
-
-        # unify posting single and multiple entities
-        if type(entities) != Dict:
-            entities = [entities]
-
-        # Validate against json schema
-        schema = self.csa_schemas[collection_name]
-        try:
-            for elem in entities:
-                validate(instance=elem, schema=schema)
-                if path is not None:
-                    elem[path[0]] = path[1]
-                else:
-                    # remove additional fields that cannot be set using POST/PUT but only through reference in URL
-                    # but passes validation
-                    if "parent" in elem:
-                        elem["parent"] = None
-
-        except Exception as ex:
-            raise ProviderInvalidDataError(ex)
-
-        # passthru to provider
-        response = self.connected_system_provider.create(collection_name, entities)
-
-        return headers, HTTPStatus.OK, to_json(response, self.pretty_print)
-
-    @gzip
-    @pre_process
     def post_systems(
             self,
             request: Union[APIRequest, Any],
@@ -706,6 +664,61 @@ class CSAPI(API):
                 request.format,
                 'NotFound',
                 "entity not found")
+
+    @gzip
+    @pre_process
+    def _handle_csa_post(
+            self,
+            request: Union[APIRequest, Any],
+            collection_name: str,
+            path: Union[Tuple[str, str], None] = None,
+    ) -> Tuple[dict, int, str]:
+        if self.connected_system_provider is None:
+            # TODO: what to return here?
+            raise NotImplementedError()
+
+        # TODO: validate that POST is supported by provider
+        # TODO: check format
+        headers = request.get_response_headers(**self.api_headers)
+        entities = json.loads(request.data)
+
+        # unify posting single and multiple entities
+        if type(entities) != Dict:
+            entities = [entities]
+
+        # Validate against json schema
+        schema = self.csa_schemas[collection_name]
+        try:
+            for elem in entities:
+                validate(instance=elem, schema=schema)
+                if path is not None:
+                    elem[path[0]] = path[1]
+                else:
+                    # remove additional fields that cannot be set using POST/PUT but only through reference in URL
+                    # but passes validation
+                    if "parent" in elem:
+                        elem["parent"] = None
+
+        except Exception as ex:
+            return self.get_exception(
+                HTTPStatus.BAD_REQUEST,
+                headers,
+                request.format,
+                'InvalidParameterValue',
+                ex)
+
+        try:
+            # passthru to provider
+            response = self.connected_system_provider.create(collection_name, entities)
+        except Exception as ex:
+            return self.get_exception(
+                HTTPStatus.BAD_REQUEST,
+                headers,
+                request.format,
+                'InvalidParameterValue',
+                ex)
+
+        return headers, HTTPStatus.OK, to_json(response, self.pretty_print)
 
     def _format_csa_response(self, request, headers, data, is_collection: bool) -> Tuple[dict, int, str]:
         headers['Content-Type'] = FORMAT_TYPES.get(request.format)
