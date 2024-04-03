@@ -1,0 +1,4 @@
+GET /collections HTTP/1.1
+Content-Type: application/sml+json
+Host: docker.srv.int.52north.org:5000
+User-Agent: HTTPie
