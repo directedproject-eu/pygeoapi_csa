@@ -37,12 +37,12 @@ LOGGER = logging.getLogger(__name__)
 def parse_common_params(query: Search, parameters: CommonParams) -> Search:
     # Parse dateTime filter
     if parameters.datetime_start() and parameters.datetime_end():
-        query = query.filter("range", validTime={"gte": parameters.datetime_start().isoformat(),
-                                                 "lte": parameters.datetime_end().isoformat()})
+        query = query.filter("range", validTime_parsed={"gte": parameters.datetime_start().isoformat(),
+                                                       "lte": parameters.datetime_end().isoformat()})
     if parameters.datetime_start():
-        query = query.filter("range", validTime={"gte": parameters.datetime_start().isoformat()})
+        query = query.filter("range", validTime_parsed={"gte": parameters.datetime_start().isoformat()})
     if parameters.datetime_end():
-        query = query.filter("range", validTime={"lte": parameters.datetime_end().isoformat()})
+        query = query.filter("range", validTime_parsed={"lte": parameters.datetime_end().isoformat()})
 
     if parameters.foi:
         LOGGER.critical("not implemented!")
@@ -113,7 +113,7 @@ class ConnectedSystemsESProvider(ConnectedSystemsBaseProvider):
             "position": {
                 "type": "geo_shape"
             },
-            "validTime": {
+            "validTime_parsed": {
                 "type": "date_range"
             },
             "parent": {
@@ -414,7 +414,7 @@ class ConnectedSystemsESProvider(ConnectedSystemsBaseProvider):
 
         # DEBUG only
         LOGGER.debug(json.dumps(query.to_dict(), indent=True, default=str))
-        return await self._search(self.systems_index_name, query.to_dict(), parameters)
+        return await self._search(self.systems_index_name, query.to_dict(), parameters, ["validTime_parsed"])
 
     async def _query_deployments(self, parameters: DeploymentsParams) -> CSAGetResponse:
         query = Search(using=self.es, index=self.deployments_index_name)
@@ -466,9 +466,14 @@ class ConnectedSystemsESProvider(ConnectedSystemsBaseProvider):
         LOGGER.debug(json.dumps(query.to_dict(), indent=True, default=str))
         return await self._search(self.properties_index_name, query.to_dict(), parameters)
 
-    async def _search(self, index: str, body: Dict, parameters: CSAParams) -> CSAGetResponse:
+    async def _search(self, index: str, body: Dict, parameters: CSAParams, excludes=None) -> CSAGetResponse:
         # Select appropriate strategy here: For collections >10k elements search_after must be used
-        found = (await self.es.search(body=body, index=index, size=parameters.limit))["hits"]
+        if excludes is None:
+            excludes = []
+        found = (await self.es.search(body=body,
+                                      index=index,
+                                      size=parameters.limit,
+                                      source_excludes=excludes))["hits"]
 
         if found["total"]["value"] > 0:
             return [h["_source"] for h in found["hits"]], []
@@ -537,7 +542,7 @@ class ConnectedSystemsESProvider(ConnectedSystemsBaseProvider):
             else:
                 end = time[1]
 
-            item[key] = {
+            item[key + "_parsed"] = {
                 "gte": start,
                 "lte": end
             }
