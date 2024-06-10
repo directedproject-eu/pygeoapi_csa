@@ -26,7 +26,7 @@ from .connectedsystems import *
 LOGGER = logging.getLogger(__name__)
 
 
-class ToarDBProvider(ConnectedSystemsBaseProvider):
+class ToarDBProvider(ConnectedSystemsPart1Provider):
     """generic Tile Provider ABC"""
 
     BASEURL = "https://toar-data.fz-juelich.de/api/v2/"

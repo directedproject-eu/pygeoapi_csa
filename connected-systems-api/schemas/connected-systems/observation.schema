@@ -1,0 +1,12 @@
+{
+  "$id": "observation.json",
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "oneOf": [
+    {
+      "type": "object"
+    },
+    {
+      "type": "array"
+    }
+  ]
+}

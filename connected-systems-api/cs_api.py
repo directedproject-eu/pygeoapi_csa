@@ -13,57 +13,67 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # =================================================================
+from typing import Callable, Self
+
 import jsonschema
 from pygeoapi.api import *
-from pygeoapi.provider.base import ProviderInvalidDataError, ProviderItemNotFoundError
+from pygeoapi.provider.base import ProviderItemNotFoundError
 
 from pygeoapi.util import filter_dict_by_key_value, render_j2_template, to_json
-from provider.connectedsystems import *
+from provider.definitions import *
 
 from jsonschema import validate
 
-F_SWE_JSON = 'swejson'
-F_OM_JSON = 'omjson'
-F_HTML = 'html'
-F_GEOJSON = 'geojson'
-F_SENSORML_JSON = 'smljson'
 
-FORMAT_TYPES = OrderedDict((
-    (F_HTML, 'text/html'),
-    (F_GEOJSON, 'application/geo+json'),
-    (F_JSONLD, 'application/ld+json'),
-    (F_JSON, 'json'),
-    (F_SENSORML_JSON, 'application/sml+json'),
-    (F_SWE_JSON, 'application/swe+json'),
-    (F_OM_JSON, 'application/om+json'),
-    ('application/sml+json', 'application/sml+json'),
-    ('application/swe+json', 'application/swe+json'),
-    ('application/om+json', 'application/om+json')
-))
+class AsyncAPIRequest(APIRequest):
+    @classmethod
+    async def with_data(cls, request, supported_locales) -> Self:
+        api_req = cls(request, supported_locales)
+        api_req._data = await request.data
+        return api_req
+
+
+def process(func):
+    """
+    Decorator that transforms an incoming Request instance specific to the
+    web framework into a generic :class:`AsyncAPIRequest` instance.
+
+    :param func: decorated function
+
+    :returns: `func`
+    """
+
+    async def inner(*args):
+        cls, req_in = args[:2]
+        req_out = await AsyncAPIRequest.with_data(req_in, getattr(cls, 'locales', set()))
+        if len(args) > 2:
+            return await func(cls, req_out, *args[2:])
+        else:
+            return await func(cls, req_out)
+
+    return inner
 
 
 class CSAPI(API):
+    csa_provider_part1: ConnectedSystemsPart1Provider | None
+    csa_provider_part2: ConnectedSystemsPart2Provider | None
+
+    csa_schemas = {}
 
     def __init__(self, config, openapi):
-
         super().__init__(config, openapi)
 
-        LOGGER.debug(f"Loading dynamic-resources")
-        self.connected_system_provider: ConnectedSystemsBaseProvider = None
-
         if config['dynamic-resources'] is not None:
-            api = config['dynamic-resources'].get('connected-systems-api', None)
-            if api is not None:
-                provider_definition = api['provider']
+            api_part1 = config['dynamic-resources'].get('connected-systems-api-part1', None)
+            if api_part1 is not None:
+                provider_definition = api_part1['provider']
                 provider_definition["base_url"] = self.base_url
-                self.connected_system_provider = load_plugin('provider', provider_definition)
+                self.csa_provider_part1 = load_plugin('provider', provider_definition)
 
                 if self.config.get('resources') is None:
                     self.config['resources'] = {}
 
                 # TODO: refresh this upon modification of the datastore (e.g. adding new collections)
-
-                self.csa_schemas = {}
                 for name, location in [("system", "schemas/connected-systems/system.schema"),
                                        ("procedure", "schemas/connected-systems/procedure.schema"),
                                        ("property", "schemas/connected-systems/property.schema"),
@@ -71,21 +81,36 @@ class CSAPI(API):
                                        ("deployment", "schemas/connected-systems/deployment.schema")]:
                     with open(location, 'r') as definition:
                         self.csa_schemas[name] = json.load(definition)
-        LOGGER.info('Dynamic resources loaded')
+            api_part2 = config['dynamic-resources'].get('connected-systems-api-part2', None)
 
-    @gzip
-    @pre_process
+            if api_part2 is not None:
+                provider_definition = api_part2['provider']
+                provider_definition["base_url"] = self.base_url
+                self.csa_provider_part2 = load_plugin('provider', provider_definition)
+
+                if self.config.get('resources') is None:
+                    self.config['resources'] = {}
+
+                for name, location in [
+                    ("datastream", "schemas/connected-systems/datastream.schema"),
+                    ("observation", "schemas/connected-systems/observation.schema")
+                ]:
+                    with open(location, 'r') as definition:
+                        self.csa_schemas[name] = json.load(definition)
+                    pass
+
+    @process
     @jsonldify
-    def get_collections(self,
-                        request: Union[APIRequest, Any],
-                        template: Tuple[dict, int, str],
-                        original_format: str,
-                        collection_id: str) -> Tuple[dict, int, str]:
+    async def get_collections(self,
+                              request: AsyncAPIRequest,
+                              template: Tuple[dict, int, str],
+                              original_format: str,
+                              collection_id: str) -> Tuple[dict, int, str]:
         """
         Adds Connected-Systems collections to existing response
         """
 
-        if self.connected_system_provider is None:
+        if self.csa_provider_part1 is None:
             # TODO: what to return here?
             raise NotImplementedError()
 
@@ -99,13 +124,12 @@ class CSAPI(API):
         # query collections
         data = None
         try:
-            request_params = request.params.to_dict()
             if collection_id is not None:
-                request_params['id'] = collection_id
+                request.params['id'] = collection_id
 
-            parameters = parse_query_parameters(CollectionParams(), request_params)
+            parameters = parse_query_parameters(CollectionParams(), request.params)
             parameters.format = original_format
-            data = self.connected_system_provider.query_collections(parameters)
+            data = self.csa_provider_part1.query_collections(parameters)
         except ProviderItemNotFoundError:
             # element was not found in resources nor dynamic-resources, return 404
             if template[1] == HTTPStatus.NOT_FOUND:
@@ -140,11 +164,10 @@ class CSAPI(API):
 
         return headers, HTTPStatus.OK, to_json(fcm, self.pretty_print)
 
-    @gzip
-    @pre_process
+    @process
     @jsonldify
-    def landing_page(self,
-                     request: Union[APIRequest, Any]) -> Tuple[dict, int, str]:
+    async def landing_page(self,
+                           request: AsyncAPIRequest) -> Tuple[dict, int, str]:
         """
         Provide API landing page
 
@@ -243,10 +266,9 @@ class CSAPI(API):
 
         return headers, HTTPStatus.OK, to_json(fcm, self.pretty_print)
 
-    @gzip
-    @pre_process
-    def conformance(self,
-                    request: Union[APIRequest, Any]) -> Tuple[dict, int, str]:
+    @process
+    async def conformance(self,
+                          request: AsyncAPIRequest) -> Tuple[dict, int, str]:
         """
         Provide conformance definition
 
@@ -258,10 +280,10 @@ class CSAPI(API):
         if not request.is_valid():
             return self.get_format_exception(request)
 
-        if not self.connected_system_provider:
+        if not self.csa_provider_part1:
             return self.get_format_exception(request)
 
-        conformance_list = self.connected_system_provider.get_conformance();
+        conformance_list = self.csa_provider_part1.get_conformance()
         conformance = {
             'conformsTo': list(set(conformance_list))
         }
@@ -269,15 +291,14 @@ class CSAPI(API):
         headers = request.get_response_headers(**self.api_headers)
         if request.format == F_HTML:  # render
             content = render_j2_template(self.tpl_config, 'conformance.html',
-                                         conformance, request.locale)
+                                         conformance, str(request.locale))
             return headers, HTTPStatus.OK, content
 
         return headers, HTTPStatus.OK, to_json(conformance, self.pretty_print)
 
-    @gzip
-    @pre_process
-    def get_connected_systems_root(
-            self, request: Union[APIRequest, Any]) -> Tuple[dict, int, str]:
+    @process
+    async def get_connected_systems_root(
+            self, request: AsyncAPIRequest) -> Tuple[dict, int, str]:
         """
         Provide Connected Systems API root page
 
@@ -407,212 +428,204 @@ class CSAPI(API):
 
         return headers, HTTPStatus.OK, to_json(content, self.pretty_print)
 
-    @gzip
-    @pre_process
-    def get_collection_items(
+    @process
+    async def get_systems(
             self,
-            request: Union[APIRequest, Any],
-            collection_id: str,
-            item_id: str) -> Tuple[dict, int, str]:
-
-        headers = request.get_response_headers(**self.api_headers)
-        try:
-            request_params = request.params.to_dict()
-            if item_id:
-                request_params['id'] = item_id
-
-            parameters = parse_query_parameters(CollectionParams(), request_params)
-            data = self.connected_system_provider.query_collection_items(collection_id, parameters)
-            return self._format_csa_response(request, headers, data, item_id is None)
-        except ProviderItemNotFoundError:
-            return headers, HTTPStatus.NOT_FOUND, ""
-
-    @gzip
-    @pre_process
-    def get_systems(
-            self,
-            request: Union[APIRequest, Any],
+            request: AsyncAPIRequest,
             path: Union[Tuple[str, str], None] = None) -> Tuple[dict, int, str]:
-        return self._handle_csa_get(request,
-                                    path,
-                                    ConnectedSystemsBaseProvider.query_systems.__name__,
-                                    SystemsParams())
+        return await self._handle_get(request,
+                                      path,
+                                      self.csa_provider_part1.query_systems,
+                                      SystemsParams())
 
-    @gzip
-    @pre_process
-    def get_procedures(
+    @process
+    async def get_procedures(
             self,
-            request: Union[APIRequest, Any],
+            request: AsyncAPIRequest,
             path: Union[Tuple[str, str], None] = None) -> Tuple[dict, int, str]:
-        return self._handle_csa_get(request,
-                                    path,
-                                    ConnectedSystemsBaseProvider.query_procedures.__name__,
-                                    ProceduresParams())
+        return await self._handle_get(request,
+                                      path,
+                                      self.csa_provider_part1.query_procedures,
+                                      ProceduresParams())
 
-    @gzip
-    @pre_process
-    def get_deployments(
+    @process
+    async def get_deployments(
             self,
-            request: Union[APIRequest, Any],
+            request: AsyncAPIRequest,
             path: Union[Tuple[str, str], None] = None) -> Tuple[dict, int, str]:
-        return self._handle_csa_get(request,
-                                    path,
-                                    ConnectedSystemsBaseProvider.query_deployments.__name__,
-                                    DeploymentsParams())
+        return await self._handle_get(request,
+                                      path,
+                                      self.csa_provider_part1.query_deployments,
+                                      DeploymentsParams())
 
-    @gzip
-    @pre_process
-    def get_sampling_features(
+    @process
+    async def get_sampling_features(
             self,
-            request: Union[APIRequest, Any],
+            request: AsyncAPIRequest,
             path: Union[Tuple[str, str], None] = None) -> Tuple[dict, int, str]:
         if request.format == FORMAT_TYPES[F_JSON] or request.format == FORMAT_TYPES[F_GEOJSON]:
-            return self._handle_csa_get(request,
-                                        path,
-                                        ConnectedSystemsBaseProvider.query_sampling_features.__name__,
-                                        SamplingFeaturesParams())
+            return await self._handle_get(request,
+                                          path,
+                                          self.csa_provider_part1.query_sampling_features,
+                                          SamplingFeaturesParams())
         else:
             return self.get_format_exception(request)
 
-    @gzip
-    @pre_process
-    def get_properties(
+    @process
+    async def get_properties(
             self,
-            request: Union[APIRequest, Any],
+            request: AsyncAPIRequest,
             path: Union[Tuple[str, str], None] = None) -> Tuple[dict, int, str]:
-        return self._handle_csa_get(request,
-                                    path,
-                                    ConnectedSystemsBaseProvider.query_properties.__name__,
-                                    CSAParams())
+        return await self._handle_get(request,
+                                      path,
+                                      self.csa_provider_part1.query_properties,
+                                      CSAParams())
 
-    @gzip
-    @pre_process
-    def get_datastreams(
+    @process
+    async def get_datastreams(
             self,
-            request: Union[APIRequest, Any],
+            request: AsyncAPIRequest,
             path: Union[Tuple[str, str], None] = None) -> Tuple[dict, int, str]:
-        if request.format == FORMAT_TYPES[F_JSON]:
-            return self._handle_csa_get(request,
-                                        path,
-                                        ConnectedSystemsBaseProvider.query_datastreams.__name__,
-                                        DatastreamsParams())
-        else:
-            return self.get_format_exception(request)
+        return await self._handle_get(request,
+                                      path,
+                                      self.csa_provider_part2.query_datastreams,
+                                      DatastreamsParams())
 
-    @gzip
-    @pre_process
-    def get_datastreams_schema(
+    @process
+    async def get_datastreams_schema(
             self,
-            request: Union[APIRequest, Any],
+            request: AsyncAPIRequest,
             path: Union[Tuple[str, str], None] = None) -> Tuple[dict, int, str]:
         if request.format == FORMAT_TYPES[F_JSON]:
             params = DatastreamsParams()
             params.schema = True
-            return self._handle_csa_get(request,
-                                        path,
-                                        ConnectedSystemsBaseProvider.query_datastreams.__name__,
-                                        params)
+            return await self._handle_get(request,
+                                          path,
+                                          self.csa_provider_part2.query_datastreams,
+                                          params)
         else:
             return self.get_format_exception(request)
 
-    @gzip
-    @pre_process
-    def get_observations(
+    @process
+    async def get_observations(
             self,
-            request: Union[APIRequest, Any],
+            request: AsyncAPIRequest,
             path: Union[Tuple[str, str], None] = None) -> Tuple[dict, int, str]:
-        if request.format == FORMAT_TYPES[F_OM_JSON] or request.format == FORMAT_TYPES[F_SWE_JSON]:
-            return self._handle_csa_get(request,
-                                        path,
-                                        ConnectedSystemsBaseProvider.query_observations.__name__,
-                                        ObservationsParams())
-        else:
-            return self.get_format_exception(request)
+        return await self._handle_get(request,
+                                      path,
+                                      self.csa_provider_part2.query_observations,
+                                      ObservationsParams())
 
-    @gzip
-    @pre_process
-    def post_systems(
+    @process
+    async def post_systems(
             self,
-            request: Union[APIRequest, Any],
+            request: AsyncAPIRequest,
             path: Union[Tuple[str, str], None] = None
     ) -> Tuple[dict, int, str]:
-        return self._handle_csa_post(
+        return await self._handle_post(
             request,
             "system",
+            self.csa_provider_part1,
             path
         )
 
-    @gzip
-    @pre_process
-    def post_sampling_feature(
+    @process
+    async def post_sampling_feature(
             self,
-            request: Union[APIRequest, Any],
+            request: AsyncAPIRequest,
             path: Union[Tuple[str, str], None] = None
     ) -> Tuple[dict, int, str]:
-        return self._handle_csa_post(
+        return await self._handle_post(
             request,
             "samplingFeature",
+            self.csa_provider_part1,
             path
         )
 
-    @gzip
-    @pre_process
-    def post_deployments(
+    @process
+    async def post_deployments(
             self,
-            request: Union[APIRequest, Any],
+            request: AsyncAPIRequest,
             path: Union[Tuple[str, str], None] = None
     ) -> Tuple[dict, int, str]:
-        return self._handle_csa_post(
+        return await self._handle_post(
             request,
             "deployment",
+            self.csa_provider_part1,
             path
         )
 
-    @gzip
-    @pre_process
-    def post_properties(
+    @process
+    async def post_properties(
             self,
-            request: Union[APIRequest, Any],
+            request: AsyncAPIRequest,
             path: Union[Tuple[str, str], None] = None
     ) -> Tuple[dict, int, str]:
-        return self._handle_csa_post(
+        return await self._handle_post(
             request,
             "property",
+            self.csa_provider_part1,
             path
         )
 
-    @gzip
-    @pre_process
-    def post_systems_to_deployment(
+    @process
+    async def post_systems_to_deployment(
             self,
-            request: Union[APIRequest, Any],
+            request: AsyncAPIRequest,
             path: Union[Tuple[str, str], None] = None
     ) -> Tuple[dict, int, str]:
-        return self._handle_csa_post(
+        return await self._handle_post(
             request,
             "system_link",
+            self.csa_provider_part1,
             path
         )
 
-    @gzip
-    @pre_process
-    def post_procedures(
+    @process
+    async def post_datastreams(
             self,
-            request: Union[APIRequest, Any],
+            request: AsyncAPIRequest,
             path: Union[Tuple[str, str], None] = None
     ) -> Tuple[dict, int, str]:
-        return self._handle_csa_post(
+        return await self._handle_post(
             request,
-            "procedure",
+            "datastream",
+            self.csa_provider_part2,
             path
         )
 
-    def _handle_csa_get(self,
-                        request: Union[APIRequest, Any],
-                        path: Union[Tuple[str, str], None],
-                        handler: str,
-                        params: CSAParams
-                        ) -> Tuple[dict, int, str]:
+    @process
+    async def post_observations(
+            self,
+            request: AsyncAPIRequest,
+            path: Union[Tuple[str, str], None] = None
+    ) -> Tuple[dict, int, str]:
+        return await self._handle_post(
+            request,
+            "observation",
+            self.csa_provider_part2,
+            path
+        )
+
+    @process
+    async def post_procedures(
+            self,
+            request: AsyncAPIRequest,
+            path: Union[Tuple[str, str], None] = None
+    ) -> Tuple[dict, int, str]:
+        return await self._handle_post(
+            request,
+            "procedure",
+            self.csa_provider_part1,
+            path
+        )
+
+    async def _handle_get(self,
+                          request: AsyncAPIRequest,
+                          path: Union[Tuple[str, str], None],
+                          handler: Callable,
+                          params: CSAParams
+                          ) -> Tuple[dict, int, str]:
         """
         Provide Connected Systems API Collections
 
@@ -623,7 +636,7 @@ class CSAPI(API):
 
         :returns: tuple of headers, status code, content
         """
-        if self.connected_system_provider is None:
+        if self.csa_provider_part1 is None:
             # TODO: what to return here?
             raise NotImplementedError()
 
@@ -633,10 +646,9 @@ class CSAPI(API):
 
         collection = True
         # Expand parameters with additional information based on path
-        request_parameters = request.params.to_dict()
         if path is not None:
             # Check that id is not malformed.
-            if not re.match("^[\w]+$", path[1]):
+            if not re.match("^[\w-]+$", path[1]):
                 return self.get_exception(
                     HTTPStatus.BAD_REQUEST,
                     headers,
@@ -646,16 +658,16 @@ class CSAPI(API):
 
             # TODO: does the case exist where a property is specified both
             #  in url and query params and we overwrite stuff here?
-            request_parameters[path[0]] = path[1]
+            request.params[path[0]] = path[1]
 
             if path[0] == "id":
                 collection = False
 
         # parse parameters
         try:
-            parameters = parse_query_parameters(params, request_parameters)
+            parameters = parse_query_parameters(params, request.params)
             parameters.format = request.format
-            data = getattr(self.connected_system_provider, handler)(parameters)
+            data = await handler(parameters)
 
             return self._format_csa_response(request, headers, data, collection)
         except ProviderItemNotFoundError:
@@ -666,17 +678,13 @@ class CSAPI(API):
                 'NotFound',
                 "entity not found")
 
-    @gzip
-    @pre_process
-    def _handle_csa_post(
+    async def _handle_post(
             self,
-            request: Union[APIRequest, Any],
+            request: AsyncAPIRequest,
             collection_name: str,
+            provider: ConnectedSystemsProvider,
             path: Union[Tuple[str, str], None] = None,
     ) -> Tuple[dict, int, str]:
-        if self.connected_system_provider is None:
-            # TODO: what to return here?
-            raise NotImplementedError()
 
         # TODO: validate that POST is supported by provider
         # TODO: check format
@@ -684,7 +692,7 @@ class CSAPI(API):
         entities = json.loads(request.data)
 
         # unify posting single and multiple entities
-        if type(entities) != Dict:
+        if type(entities) != list:
             entities = [entities]
 
         # Validate against json schema
@@ -710,19 +718,43 @@ class CSAPI(API):
 
         try:
             # passthru to provider
-            response = self.connected_system_provider.create(collection_name, entities)
+            response = await provider.create(collection_name, entities)
         except Exception as ex:
             return self.get_exception(
                 HTTPStatus.BAD_REQUEST,
                 headers,
                 request.format,
                 'InvalidParameterValue',
-                ex)
+                ex.args)
 
         return headers, HTTPStatus.OK, to_json(response, self.pretty_print)
 
+    @process
+    async def get_collection_items(
+            self,
+            request: AsyncAPIRequest,
+            collection_id: str,
+            item_id: str) -> Tuple[dict, int, str]:
+
+        if self.csa_provider_part1 is None:
+            # TODO: what to return here?
+            raise NotImplementedError()
+
+        headers = request.get_response_headers(**self.api_headers)
+        try:
+            request_params = request.params
+            if item_id:
+                request_params['id'] = item_id
+
+            parameters = parse_query_parameters(CollectionParams(), request_params)
+            data = await self.csa_provider_part1.query_collection_items(collection_id, parameters)
+            return self._format_csa_response(request, headers, data, item_id is None)
+        except ProviderItemNotFoundError:
+            return headers, HTTPStatus.NOT_FOUND, ""
+
     def _format_csa_response(self, request, headers, data, is_collection: bool) -> Tuple[dict, int, str]:
-        headers['Content-Type'] = FORMAT_TYPES.get(request.format)
+        if FORMAT_TYPES.get(request.format):
+            headers['Content-Type'] = FORMAT_TYPES.get(request.format)
 
         if data is None:
             return headers, HTTPStatus.NOT_FOUND, ""
@@ -742,4 +774,13 @@ class CSAPI(API):
                 "items": [item for item in data[0]],
                 "links": [link for link in data[1]],
             } if is_collection else data[0][0]
-            return headers, HTTPStatus.OK, to_json(response, self.pretty_print)
+            if request.format == F_HTML:
+                # Some nicer formatting
+                pretty = f"""
+                <html><body><pre><code>
+                {to_json(response, True)}
+                </code></pre></body></html>
+                """
+                return headers, HTTPStatus.OK, pretty
+            else:
+                return headers, HTTPStatus.OK, to_json(response, self.pretty_print)

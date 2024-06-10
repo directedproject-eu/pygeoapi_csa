@@ -29,8 +29,8 @@ RUN pip install --no-deps -r requirements_nodeps.txt
 
 # copy application files
 COPY connected-systems-api connected-systems-api
-COPY docker/examples/elasticsearch-csa/openapi-config-csa.yml .
-COPY docker/examples/elasticsearch-csa/pygeoapi-config.yml .
+COPY docker/examples/hybrid-csa/openapi-config-csa.yml .
+COPY docker/examples/hybrid-csa/pygeoapi-config.yml .
 COPY gunicorn.conf.py .
 
 WORKDIR /app/connected-systems-api
@@ -41,7 +41,7 @@ FROM base as toardb
 COPY requirements_toardb_csa.txt .
 RUN pip install -r requirements_toardb_csa.txt
 
-FROM base as elasticsearch
-# individual requirements for elasticsearch-provider
-COPY requirements_elasticsearch_csa.txt .
-RUN pip install -r requirements_elasticsearch_csa.txt
+FROM base as hybrid
+# individual requirements for hybrid-provider
+COPY requirements_hybrid_csa.txt .
+RUN pip install -r requirements_hybrid_csa.txt

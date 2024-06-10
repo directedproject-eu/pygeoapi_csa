@@ -13,6 +13,8 @@ volumes:
     driver: local
   logstashdata01:
     driver: local
+  postgresdata:
+    driver: local
 
 
 networks:
@@ -37,6 +39,23 @@ services:
     depends_on:
       es01:
         condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+
+  timescaledb:
+    image: timescale/timescaledb-ha:pg16
+    restart: always
+    ports:
+      - 5432:5432
+    environment:
+      TIMESCALEDB_TELEMETRY: off
+      POSTGRES_DB: csa
+      POSTGRES_USER: timescaledb
+      POSTGRES_PASSWORD: password
+      ALLOW_IP_RANGE: 0.0.0.0/0
+      POSTGRES_MULTIPLE_EXTENSIONS: postgis
+    volumes:
+      - postgresdata:/var/lib/postgresql/data
 
   setup:
     image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
@@ -137,33 +156,43 @@ services:
       timeout: 10s
       retries: 120
 
-  kibana:
-    depends_on:
-      es01:
-        condition: service_healthy
-    image: docker.elastic.co/kibana/kibana:${STACK_VERSION}
-    labels:
-      co.elastic.logs/module: kibana
-    volumes:
-      - certs:/usr/share/kibana/config/certs
-      - kibanadata:/usr/share/kibana/data
-    ports:
-      - ${KIBANA_PORT}:5601
-    environment:
-      - SERVERNAME=kibana
-      - ELASTICSEARCH_HOSTS=https://es01:9200
-      - ELASTICSEARCH_USERNAME=kibana_system
-      - ELASTICSEARCH_PASSWORD=${KIBANA_PASSWORD}
-      - ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES=config/certs/ca/ca.crt
-      - XPACK_SECURITY_ENCRYPTIONKEY=${ENCRYPTION_KEY}
-      - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=${ENCRYPTION_KEY}
-      - XPACK_REPORTING_ENCRYPTIONKEY=${ENCRYPTION_KEY}
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl -s -I http://localhost:5601 | grep -q 'HTTP/1.1 302 Found'",
-        ]
-      interval: 10s
-      timeout: 10s
-      retries: 120
+######  Debugging  ######
+#  kibana:
+#    depends_on:
+#      es01:
+#        condition: service_healthy
+#    image: docker.elastic.co/kibana/kibana:${STACK_VERSION}
+#    labels:
+#      co.elastic.logs/module: kibana
+#    volumes:
+#      - certs:/usr/share/kibana/config/certs
+#      - kibanadata:/usr/share/kibana/data
+#    ports:
+#      - ${KIBANA_PORT}:5601
+#    environment:
+#      - SERVERNAME=kibana
+#      - ELASTICSEARCH_HOSTS=https://es01:9200
+#      - ELASTICSEARCH_USERNAME=kibana_system
+#      - ELASTICSEARCH_PASSWORD=${KIBANA_PASSWORD}
+#      - ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES=config/certs/ca/ca.crt
+#      - XPACK_SECURITY_ENCRYPTIONKEY=${ENCRYPTION_KEY}
+#      - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=${ENCRYPTION_KEY}
+#      - XPACK_REPORTING_ENCRYPTIONKEY=${ENCRYPTION_KEY}
+#    healthcheck:
+#      test:
+#        [
+#          "CMD-SHELL",
+#          "curl -s -I http://localhost:5601 | grep -q 'HTTP/1.1 302 Found'",
+#        ]
+#      interval: 10s
+#      timeout: 10s
+#      retries: 120
+
+#  pgadmin:
+#    image: dpage/pgadmin4
+#    environment:
+#      PGADMIN_DEFAULT_EMAIL: admin@example.io
+#      PGADMIN_DEFAULT_PASSWORD: admin
+#      PGADMIN_CONFIG_SERVER_MODE: 'False'
+#    ports:
+#      - 5050:80

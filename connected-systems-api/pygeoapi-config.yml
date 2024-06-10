@@ -1,4 +1,3 @@
-
 server:
   bind:
     host: 0.0.0.0
@@ -9,7 +8,7 @@ server:
   gzip: false
   languages:
     - en-US
-  pretty_print: true
+  pretty_print: false
   connected_systems: true
   limit: 10
   templates:
@@ -27,7 +26,7 @@ metadata:
     title:
       en: connected-systems-pygeoapi
     description:
-      en:  OGC Connected-Systems API backed by elasticsearch
+      en: OGC Connected-Systems API backed by elasticsearch
     keywords:
       en:
         - geospatial
@@ -67,16 +66,36 @@ dynamic-resources:
   #        provider:
   #            type: toardb-adapter
   #            name: toardb
-  connected-systems-api:
+  connected-systems-api-part1:
     type: connected-systems
     title: "elasticsearch-csa-adapter"
-    description: "Adapter to Elasticsearch CSA Backend"
-    keywords: []
+    description: "Adapter to Elasticsearch CSA-Part1 Backend"
+    keywords: [ ]
     provider:
       type: elastic-csa-adapter
       name: ElasticSearchConnectedSystems
-      host: es01
+      host: localhost
       port: 9200
-      path: csa
+      dbname: csa
       user: elastic
       password: password
+  connected-systems-api-part2:
+    type: connected-systems
+    title: "timescale-csa-adapter"
+    description: "Adapter to TimescaleDB CSA-Part2 Backend"
+    keywords: [ ]
+    provider:
+      type: timescale-csa-adapter
+      name: TimescaleDBConnectedSystems
+      timescale:
+        host: localhost
+        port: 5432
+        user: timescaledb
+        password: password
+        dbname: csa
+      elastic:
+        host: localhost
+        port: 9200
+        dbname: csa
+        user: elastic
+        password: password

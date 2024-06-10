@@ -1,0 +1,4 @@
+aiohttp
+elasticsearch
+elasticsearch-dsl
+asyncpg
