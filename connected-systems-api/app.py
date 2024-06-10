@@ -15,14 +15,13 @@
 # =================================================================
 import inspect
 import os.path
-from functools import wraps
 
 from quart import Quart, request, Request, make_response
 from pygeoapi import flask_app
 from pygeoapi.flask_app import API_RULES, CONFIG, api_, OPENAPI
 from werkzeug.datastructures import MultiDict
 
-from cs_api import *
+from api import *
 
 
 # makes request args modifiable
@@ -77,15 +76,20 @@ async def collections(collection_id: str = None):
     :returns: HTTP response
     """
 
+    # TODO(specki): add compatibility with AsyncAPIRequest to enable non-csa collections
     # Overwrite original request format with json so we can parse response in wrapper
-    original_format = None
-    if "f" in request.args:
-        original_format = request.args["f"]
-    request.args["f"] = "json"
-    response = csapi_.get_collections(request,
-                                      api_.describe_collections(request, collection_id),
-                                      original_format,
-                                      collection_id)
+    # original_format = None
+    # if "f" in request.args:
+    #    original_format = request.args["f"]
+    # request.args["f"] = "json"
+    # response = await csapi_.get_collections(request,
+    #                                        api_.describe_collections(request, collection_id),
+    #                                        original_format,
+    #                                        collection_id)
+    response = await csapi_.get_collections(request,
+                                            ({}, HTTPStatus.NOT_FOUND, ""),
+                                            request.args["f"] if "f" in request.args else None,
+                                            collection_id)
     return await get_response(response)
 
 
@@ -309,7 +313,7 @@ async def init_db():
 
 
 @APP.after_serving
-async def init_db():
+async def close_db():
     """ Clean exit database/provider connections """
     if csapi_.csa_provider_part1:
         await csapi_.csa_provider_part1.close()

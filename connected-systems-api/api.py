@@ -129,7 +129,7 @@ class CSAPI(API):
 
             parameters = parse_query_parameters(CollectionParams(), request.params)
             parameters.format = original_format
-            data = self.csa_provider_part1.query_collections(parameters)
+            data = await self.csa_provider_part1.query_collections(parameters)
         except ProviderItemNotFoundError:
             # element was not found in resources nor dynamic-resources, return 404
             if template[1] == HTTPStatus.NOT_FOUND:
@@ -143,11 +143,12 @@ class CSAPI(API):
                 if original_format == F_HTML:  # render
                     headers["Content-Type"] = "text/html"
                     content = render_j2_template(self.tpl_config,
-                                                 'collections/index.html',
+                                                 'templates/connected-systems/collection/item.html',
                                                  fcm,
                                                  request.locale)
                     return headers, HTTPStatus.OK, content
                 else:
+                    headers["Content-Type"] = "application/json"
                     return headers, HTTPStatus.OK, to_json(fcm, self.pretty_print)
             else:
                 fcm['collections'].extend(coll for _, coll in data.items())
@@ -160,6 +161,7 @@ class CSAPI(API):
                                                  request.locale)
                     return headers, HTTPStatus.OK, content
                 else:
+                    headers["Content-Type"] = "application/json"
                     return headers, HTTPStatus.OK, to_json(fcm, self.pretty_print)
 
         return headers, HTTPStatus.OK, to_json(fcm, self.pretty_print)

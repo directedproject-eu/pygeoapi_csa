@@ -81,7 +81,7 @@ class ElasticSearchConfig:
     dbname: str
 
 
-async def connect_elasticsearch(config: ElasticSearchConfig, mappings: List[Tuple[str, Dict]]) -> AsyncElasticsearch:
+async def connect_elasticsearch(config: ElasticSearchConfig) -> AsyncElasticsearch:
     LOGGER.debug(f'Connecting to Elasticsearch at: https://{config.hostname}:{config.port}/{config.dbname}')
     es: AsyncElasticsearch = AsyncElasticsearch(
         [
@@ -108,14 +108,15 @@ async def connect_elasticsearch(config: ElasticSearchConfig, mappings: List[Tupl
         msg = 'only ES 8+ supported'
         LOGGER.critical(msg)
         raise ProviderConnectionError(msg)
+    return es
 
+
+async def setup_elasticsearch(es: AsyncElasticsearch, mappings: List[Tuple[str, Dict]]) -> AsyncElasticsearch:
     try:
         for index in mappings:
             index_name, index_mapping = index
 
-            # TODO: Debug only!
-            #LOGGER.critical("DEBUG ONLY! DELETING ALL EXISTING INDICES")
-            #await es.options(ignore_status=[400, 404]).indices.delete(index=index_name)
+            await es.options(ignore_status=[400, 404]).indices.delete(index=index_name)
 
             if not await (es.indices.exists(index=index_name)):
                 await es.indices.create(

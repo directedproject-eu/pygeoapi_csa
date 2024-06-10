@@ -25,10 +25,10 @@ networks:
 
 services:
   connected-systems-api:
-    image: 52north/connected-systems-pygeoapi:elasticsearch-latest
+    image: docker.52north.org/sensor-web/cs-api:latest
     build:
       context: ../../../
-      target: elasticsearch
+      target: hybrid
     env_file:
       - .env
     volumes:

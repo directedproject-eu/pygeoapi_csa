@@ -30,7 +30,7 @@ from ..definitions import ConnectedSystemsPart1Provider, CSACrudResponse, System
     CSAGetResponse, DeploymentsParams, ProceduresParams, SamplingFeaturesParams, CSAParams, CollectionParams
 
 from ..connector_elastic import connect_elasticsearch, ElasticSearchConfig, parse_csa_params, parse_spatial_params, \
-    parse_datetime_params, create_many, search
+    parse_datetime_params, create_many, search, setup_elasticsearch
 
 LOGGER = logging.getLogger(__name__)
 
@@ -132,20 +132,21 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider):
         ]
 
     async def open(self):
+        self._es: AsyncElasticsearch = await connect_elasticsearch(self._es_config)
 
-        self._es: AsyncElasticsearch = await connect_elasticsearch(
-            self._es_config,
-            [(self.systems_index_name, self.system_mappings),
-             (self.collections_index_name, None),
-             (self.procedures_index_name,
-              self.procedures_mappings),
-             (self.deployments_index_name,
-              self.deployments_mappings),
-             (self.properties_index_name,
-              self.properties_mappings),
-             (self.samplingfeatures_index_name,
-              self.samplingfeatures_mappings),
-             ])
+    async def setup(self):
+        await setup_elasticsearch(self._es,
+                                  [(self.systems_index_name, self.system_mappings),
+                                   (self.collections_index_name, None),
+                                   (self.procedures_index_name,
+                                    self.procedures_mappings),
+                                   (self.deployments_index_name,
+                                    self.deployments_mappings),
+                                   (self.properties_index_name,
+                                    self.properties_mappings),
+                                   (self.samplingfeatures_index_name,
+                                    self.samplingfeatures_mappings),
+                                   ])
         await self.__create_mandatory_collections()
 
     async def close(self):
@@ -165,14 +166,26 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider):
                 "links": [
                     {
                         "rel": "self",
-                        "title": "This document",
-                        "href": "collections/all_systems",
+                        "title": "This document (JSON)",
+                        "href": "/collections/all_systems",
                         "type": "application/json"
                     },
                     {
+                        "rel": "self",
+                        "title": "This document (HTML)",
+                        "href": "/collections/all_systems?f=html",
+                        "type": "text/html"
+                    },
+                    {
                         "rel": "items",
-                        "title": "Access the system instances in this collection",
-                        "href": "systems",
+                        "title": "Access the system instances in this collection (HTML)",
+                        "href": "/systems",
+                        "type": "text/html"
+                    },
+                    {
+                        "rel": "items",
+                        "title": "Access the system instances in this collection (JSON)",
+                        "href": "/systems?f=application/json",
                         "type": "application/json"
                     }
                 ]
@@ -187,14 +200,26 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider):
                 "links": [
                     {
                         "rel": "self",
-                        "title": "This document",
-                        "href": "collections/all_datastreams",
+                        "title": "This document (JSON)",
+                        "href": "/collections/all_datastreams",
+                        "type": "application/json"
+                    },
+                    {
+                        "rel": "self",
+                        "title": "This document (HTML)",
+                        "href": "/collections/all_datastreams?f=html",
                         "type": "application/json"
                     },
                     {
                         "rel": "items",
-                        "title": "Access the datastreams in this collection",
-                        "href": "datastreams",
+                        "title": "Access the datastreams in this collection (HTML)",
+                        "href": "/datastreams",
+                        "type": "text/html"
+                    },
+                    {
+                        "rel": "items",
+                        "title": "Access the datastreams in this collection (JSON)",
+                        "href": "/datastreams?f=application/json",
                         "type": "application/json"
                     }
                 ]
@@ -209,14 +234,26 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider):
                 "links": [
                     {
                         "rel": "self",
-                        "title": "This document",
-                        "href": "collections/all_fois",
+                        "title": "This document (JSON)",
+                        "href": "/collections/all_fois",
                         "type": "application/json"
                     },
                     {
+                        "rel": "self",
+                        "title": "This document (HTML)",
+                        "href": "/collections/all_fois?f=html",
+                        "type": "text/html"
+                    },
+                    {
                         "rel": "items",
-                        "title": "Access the features of interests in this collection",
-                        "href": "featuresOfInterest",
+                        "title": "Access the features of interests in this collection (HTML)",
+                        "href": "/featuresOfInterest",
+                        "type": "text/html"
+                    },
+                    {
+                        "rel": "items",
+                        "title": "Access the features of interests in this collection (JSON)",
+                        "href": "/featuresOfInterest?f=json",
                         "type": "application/json"
                     }
                 ]
@@ -231,14 +268,26 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider):
                 "links": [
                     {
                         "rel": "self",
-                        "title": "This document",
-                        "href": "collections/all_procedures",
+                        "title": "This document (JSON)",
+                        "href": "/collections/all_procedures",
+                        "type": "application/json"
+                    },
+                    {
+                        "rel": "self",
+                        "title": "This document (HTML)",
+                        "href": "/collections/all_procedures?f=html",
                         "type": "application/json"
                     },
                     {
                         "rel": "items",
-                        "title": "Access the procedures in this collection",
+                        "title": "Access the procedures in this collection (HTML)",
                         "href": "procedures",
+                        "type": "text/html"
+                    },
+                    {
+                        "rel": "items",
+                        "title": "Access the procedures in this collection (JSON)",
+                        "href": "procedures?f=application/json",
                         "type": "application/json"
                     }
                 ]

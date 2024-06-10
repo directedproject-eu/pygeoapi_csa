@@ -159,6 +159,9 @@ class ConnectedSystemsProvider:
     async def open(self):
         pass
 
+    async def setup(self):
+        pass
+
     async def close(self):
         pass
 
@@ -226,7 +229,7 @@ class ConnectedSystemsPart2Provider(ConnectedSystemsProvider):
 class ConnectedSystemsPart1Provider(ConnectedSystemsProvider):
     """Base provider for Providers implementing Connected Systems API Part 1"""
 
-    def query_collections(self, parameters: CollectionParams) -> CSAGetResponse:
+    async def query_collections(self, parameters: CollectionParams) -> CSAGetResponse:
         """
         implements queries on collections as specified in openapi-connectedsystems-1
 

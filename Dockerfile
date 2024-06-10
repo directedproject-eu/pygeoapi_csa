@@ -31,10 +31,10 @@ RUN pip install --no-deps -r requirements_nodeps.txt
 COPY connected-systems-api connected-systems-api
 COPY docker/examples/hybrid-csa/openapi-config-csa.yml .
 COPY docker/examples/hybrid-csa/pygeoapi-config.yml .
-COPY gunicorn.conf.py .
+COPY hypercorn.conf.py .
 
 WORKDIR /app/connected-systems-api
-CMD ["gunicorn", "-c", "../gunicorn.conf.py", "flask_app:APP"]
+CMD ["sh", "-c", "python setup.py && hypercorn -c ../hypercorn.conf.py app:APP"]
 
 FROM base as toardb
 # individual requirements for toardb-provider

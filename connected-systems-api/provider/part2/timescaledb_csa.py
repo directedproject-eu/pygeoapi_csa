@@ -15,7 +15,7 @@ from .util import TimescaleDbConfig, ObservationQuery, Observation
 from ..definitions import ConnectedSystemsPart2Provider, CSAGetResponse, DatastreamsParams, ObservationsParams, \
     CSACrudResponse, ResulttimePhenomenontimeParam
 from ..connector_elastic import create_many, connect_elasticsearch, ElasticSearchConfig, search, parse_datetime_params, \
-    parse_csa_params, parse_temporal_filters
+    parse_csa_params, parse_temporal_filters, setup_elasticsearch
 
 from .formats.om_json_scalar import OMJsonSchemaParser
 
@@ -59,47 +59,48 @@ class ConnectedSystemsTimescaleDBProvider(ConnectedSystemsPart2Provider):
         self.parser = OMJsonSchemaParser()
 
     async def open(self):
-        await self.open_timescaledb()
-        await self.open_elasticsearch()
-
-    async def open_timescaledb(self):
         self._pool = await asyncpg.create_pool(self._ts_config.connection_string(),
                                                min_size=self._ts_config.pool_min_size,
                                                max_size=self._ts_config.pool_max_size)
 
+        self._es: AsyncElasticsearch = await connect_elasticsearch(self._es_config)
+
+    async def setup(self):
+        ## Setup TimescaleDB
         statements = []
+        statements.append("""CREATE EXTENSION IF NOT EXISTS POSTGIS;""")
+
         if self._ts_config.drop_tables:
             statements.append("""DROP TABLE IF EXISTS observations;""")
 
         statements.append("""CREATE TABLE IF NOT EXISTS observations (
-                                                        uuid UUID DEFAULT gen_random_uuid(),
-                                                        phenomenontime TIMESTAMPTZ ,
-                                                        resulttime TIMESTAMPTZ NOT NULL,
-                                                        result JSONB,
-                                                        geom GEOMETRY,
-                                                        foi text,
-                                                        datastream text,
-                                                        observedproperty text
-                                                    );
-                                                    """)
+                                                                uuid UUID DEFAULT gen_random_uuid(),
+                                                                phenomenontime TIMESTAMPTZ ,
+                                                                resulttime TIMESTAMPTZ NOT NULL,
+                                                                result JSONB,
+                                                                geom GEOMETRY,
+                                                                foi text,
+                                                                datastream text,
+                                                                observedproperty text
+                                                            );
+                                                            """)
 
         statements.append("""SELECT create_hypertable(
-                                'observations',
-                                by_range('resulttime'),
-                                if_not_exists => TRUE
-                            );
-                            """)
+                                        'observations',
+                                        by_range('resulttime'),
+                                        if_not_exists => TRUE
+                                    );
+                                    """)
 
         connection: Connection
         async with self._pool.acquire() as connection:
             async with connection.transaction():
                 for stmnt in statements:
                     await connection.execute(stmnt)
-        return self
 
-    async def open_elasticsearch(self):
-        self._es: AsyncElasticsearch = await connect_elasticsearch(
-            self._es_config,
+        ## Setup ElasticSearch
+        await setup_elasticsearch(
+            self._es,
             [
                 (self.datastreams_index_name, self.datastream_mappings),
             ])
