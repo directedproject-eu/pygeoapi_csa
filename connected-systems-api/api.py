@@ -127,7 +127,8 @@ class CSAPI(API):
             if collection_id is not None:
                 request.params['id'] = collection_id
 
-            parameters = parse_query_parameters(CollectionParams(), request.params)
+            parameters = parse_query_parameters(CollectionParams(), request.params,
+                                                self.base_url + "/" + request.path_info)
             parameters.format = original_format
             data = await self.csa_provider_part1.query_collections(parameters)
         except ProviderItemNotFoundError:
@@ -667,7 +668,7 @@ class CSAPI(API):
 
         # parse parameters
         try:
-            parameters = parse_query_parameters(params, request.params)
+            parameters = parse_query_parameters(params, request.params, self.base_url + "/" + request.path_info)
             parameters.format = request.format
             data = await handler(parameters)
 
@@ -748,7 +749,8 @@ class CSAPI(API):
             if item_id:
                 request_params['id'] = item_id
 
-            parameters = parse_query_parameters(CollectionParams(), request_params)
+            parameters = parse_query_parameters(CollectionParams(), request_params,
+                                                self.base_url + "/" + request.path_info)
             data = await self.csa_provider_part1.query_collection_items(collection_id, parameters)
             return self._format_csa_response(request, headers, data, item_id is None)
         except ProviderItemNotFoundError:

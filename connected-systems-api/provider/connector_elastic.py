@@ -30,10 +30,6 @@ def parse_csa_params(query: Search, parameters: CSAParams) -> Search:
         query = query.filter("terms", _id=parameters.id)
     if parameters.q is not None:
         query = query.query("multi_match", query=parameters.q, fields=["name", "description"])
-
-    if parameters.offset != 0:
-        LOGGER.critical("not implemented!")
-        raise ProviderQueryError("not implemented")
     return query
 
 
@@ -50,7 +46,7 @@ def parse_spatial_params(query: Search,
     return query
 
 
-def parse_temporal_filters(query, parameters: ResulttimePhenomenontimeParam) -> Search:
+def parse_temporal_filters(query, parameters: ObservationsParams | DatastreamsParams) -> Search:
     # Parse resultTime filter
     if parameters.resulttime_start() and parameters.resulttime_end():
         query = query.filter("range", validTime_parsed={"gte": parameters.resulttime_start().isoformat(),
@@ -116,8 +112,6 @@ async def setup_elasticsearch(es: AsyncElasticsearch, mappings: List[Tuple[str, 
         for index in mappings:
             index_name, index_mapping = index
 
-            await es.options(ignore_status=[400, 404]).indices.delete(index=index_name)
-
             if not await (es.indices.exists(index=index_name)):
                 await es.indices.create(
                     index=index_name,
@@ -141,10 +135,21 @@ async def search(es: AsyncElasticsearch,
     found = (await es.search(body=body,
                              index=index,
                              size=parameters.limit,
+                             from_=parameters.offset,
                              source_excludes=excludes))["hits"]
 
-    if found["total"]["value"] > 0:
-        return [h["_source"] for h in found["hits"]], []
+    count = found["total"]["value"]
+    if count > 0:
+        links = []
+
+        if count == int(parameters.limit):
+            links.append({
+                "title": "next",
+                "rel": "next",
+                "href": parameters.nextlink()
+            })
+
+        return [h["_source"] for h in found["hits"]], links
     else:
 
         # check if this query returns 404 or 200 with empty body in case of no return

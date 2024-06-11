@@ -65,8 +65,10 @@ class OMJsonSchemaParser(SchemaParser):
         )
 
     def encode(self, obs: asyncpg.Record) -> any:
+        #TODO(specki): Check what is officially required here, e.g. are datastream@link or foi@link necessary?
         return {
             "id": str(obs["uuid"]),
+            "datastream@id": str(obs["datastream"]),
             "resultTime": obs["resulttime"],
             "phenomenonTime": obs["phenomenontime"],
             "result": json.loads(obs["result"])

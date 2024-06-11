@@ -5,19 +5,16 @@ from typing import List, Dict, Tuple
 
 import asyncpg
 from asyncpg import Connection
-
-from elastic_transport import NodeConfig
 from elasticsearch import AsyncElasticsearch
 from elasticsearch_dsl import Search
-from pygeoapi.provider.base import ProviderConnectionError, ProviderGenericError, ProviderItemNotFoundError
-
-from .util import TimescaleDbConfig, ObservationQuery, Observation
-from ..definitions import ConnectedSystemsPart2Provider, CSAGetResponse, DatastreamsParams, ObservationsParams, \
-    CSACrudResponse, ResulttimePhenomenontimeParam
-from ..connector_elastic import create_many, connect_elasticsearch, ElasticSearchConfig, search, parse_datetime_params, \
-    parse_csa_params, parse_temporal_filters, setup_elasticsearch
+from pygeoapi.provider.base import ProviderGenericError, ProviderItemNotFoundError
 
 from .formats.om_json_scalar import OMJsonSchemaParser
+from .util import TimescaleDbConfig, ObservationQuery, Observation
+from ..connector_elastic import create_many, connect_elasticsearch, ElasticSearchConfig, search, parse_csa_params, \
+    parse_temporal_filters, setup_elasticsearch
+from ..definitions import ConnectedSystemsPart2Provider, CSAGetResponse, DatastreamsParams, ObservationsParams, \
+    CSACrudResponse
 
 LOGGER = logging.getLogger(__name__)
 
@@ -41,6 +38,7 @@ class ConnectedSystemsTimescaleDBProvider(ConnectedSystemsPart2Provider):
 
     def __init__(self, provider_def):
         super().__init__(provider_def)
+        self.base_url = provider_def["base_url"]
         self._ts_config = TimescaleDbConfig(
             hostname=provider_def["timescale"]["host"],
             port=provider_def["timescale"]["port"],
@@ -227,18 +225,19 @@ class ConnectedSystemsTimescaleDBProvider(ConnectedSystemsPart2Provider):
             q.with_id(parameters.id)
         if parameters.offset:
             q.with_offset(parameters.offset)
-        if parameters.phenomenontime:
-            q.with_time("phenomenontime", parameters.phenomenontime)
-        if parameters.resulttime:
-            q.with_time("resulttime", parameters.resulttime)
-        if parameters.system:
-            q.with_system(parameters.system)
+        if parameters._phenomenonTime:
+            q.with_time("phenomenontime", parameters._phenomenonTime)
+        if parameters._resultTime:
+            q.with_time("resulttime", parameters._resultTime)
         if parameters.foi:
             q.with_foi(parameters.foi)
         if parameters.observedProperty:
             q.with_observedproperty(parameters.observedProperty)
+        if parameters.datastream:
+            q.with_datastream(parameters.datastream)
 
-        LOGGER.critical(q.to_sql())
+        #if parameters.system:
+        #    q.with_system(parameters.system)
 
         connection: Connection
         async with self._pool.acquire() as connection:
@@ -247,7 +246,18 @@ class ConnectedSystemsTimescaleDBProvider(ConnectedSystemsPart2Provider):
             response = await connection.fetch("SELECT * FROM observations " + q.to_sql(), *q.parameters)
 
             if len(response) > 0:
-                return [self.parser.encode(row) for row in response], []
+                links = []
+                if len(response) == int(parameters.limit):
+                    # page is fully filled - we assume a nextpage exists
+                    url = self.base_url
+                    if parameters.datastream:
+                        url += f"/datastreams/{parameters.datastream}"
+                    links.append({
+                        "title": "next",
+                        "rel": "next",
+                        "href": parameters.nextlink()
+                    })
+                return [self.parser.encode(row) for row in response], links
             else:
                 # check if this query returns 404 or 200 with empty body in case of no return
                 if parameters.id:

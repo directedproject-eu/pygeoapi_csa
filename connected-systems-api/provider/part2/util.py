@@ -73,6 +73,11 @@ class ObservationQuery:
     def with_foi(self, ids: List[str]) -> Self:
         return self._in("foi", ids)
 
+    def with_datastream(self, id: str) -> Self:
+        self.clauses.append(f"datastream=${len(self.clauses) + 1}")
+        self.parameters.append(id)
+        return self
+
     def with_observedproperty(self, ids: List[str]) -> Self:
         return self._in("observedproperty", ids)
 

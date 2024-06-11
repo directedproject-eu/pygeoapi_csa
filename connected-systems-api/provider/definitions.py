@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # =================================================================
+import dataclasses
+import urllib.parse
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Tuple, TypeAlias
 from datetime import datetime
@@ -45,16 +47,15 @@ FORMAT_TYPES = OrderedDict((
 ))
 
 
-@dataclass(slots=True)
+@dataclass
 class CSAParams:
+    _parameters = ["f", "id", "q", "limit", "offset"]
+    _url: str = None
     f: str = None  # format
     id: List[str] = None
     q: Optional[List[str]] = None
     limit: int = 10
     offset: int = 0  # non-standard
-
-    def parameters(self):
-        return [name for name in dir(self) if not name.startswith('_')]
 
     @property
     def format(self):
@@ -64,59 +65,73 @@ class CSAParams:
     def format(self, inp):
         self.f = inp
 
+    def nextlink(self) -> str:
+        values = {k: v for k, v in dataclasses.asdict(self).items() if v is not None and not k.startswith("_")}
+        values["offset"] += values["limit"]
+        return (self._url
+                + "?"
+                + urllib.parse.urlencode(values))
 
+
+@dataclass
 class BBoxParam:
     bbox: Optional[Dict] = None
 
 
+@dataclass
 class GeomParam:
     geom: Optional[str] = None
 
 
+@dataclass
 class ResulttimePhenomenontimeParam(CSAParams):
-    phenomenontime: TimeInterval = None
-    resulttime: TimeInterval = None
+    phenomenonTime: str = None  # unparsed original value
+    resultTime: str = None  # unparsed original value
+
+    _phenomenonTime: TimeInterval = None
+    _resultTime: TimeInterval = None
 
     def phenomenontime_start(self):
-        return self.phenomenontime[0] if self.phenomenontime else None
+        return self._phenomenonTime[0] if self._phenomenonTime else None
 
     def phenomenontime_end(self):
-        return self.phenomenontime[1] if self.phenomenontime else None
+        return self._phenomenonTime[1] if self._phenomenonTime else None
 
     def resulttime_start(self):
-        return self.resulttime[0] if self.resulttime else None
+        return self._resultTime[0] if self._resultTime else None
 
     def resulttime_end(self):
-        return self.resulttime[1] if self.resulttime else None
+        return self._resultTime[1] if self._resultTime else None
 
 
+@dataclass
+class DatetimeParam(CSAParams):
+    datetime: str = None  # unparsed original value
+    _datetime: TimeInterval = None
+
+    def datetime_start(self):
+        return self._datetime[0] if self._datetime else None
+
+    def datetime_end(self):
+        return self._datetime[1] if self._datetime else None
+
+
+@dataclass
 class FoiObservedpropertyParam(CSAParams):
     foi: Optional[List[str]] = None
     observedProperty: Optional[List[str]] = None
 
 
-class DatetimeParam(CSAParams):
-    datetime: TimeInterval = None
-
-    def datetime_start(self):
-        return self.datetime[0] if self.datetime else None
-
-    def datetime_end(self):
-        return self.datetime[1] if self.datetime else None
-
-
-@dataclass(slots=True)
-class CollectionParams(CSAParams, BBoxParam, GeomParam):
-    datetime: TimeInterval = None
-
-
 @dataclass(slots=True)
 class CollectionParams(DatetimeParam, FoiObservedpropertyParam, CSAParams, BBoxParam, GeomParam):
+    _parameters = ["f", "id", "q", "limit", "offset", "foi", "observedProperty", "bbox", "geom"]
     pass
 
 
 @dataclass(slots=True)
 class SystemsParams(DatetimeParam, FoiObservedpropertyParam, BBoxParam, GeomParam):
+    _parameters = ["f", "id", "q", "limit", "offset", "bbox", "foi", "observedProperty", "parent", "procedure",
+                   "controlledProperty", "geom"]
     parent: Optional[List[str]] = None
     procedure: Optional[List[str]] = None
     controlledProperty: Optional[List[str]] = None
@@ -124,29 +139,36 @@ class SystemsParams(DatetimeParam, FoiObservedpropertyParam, BBoxParam, GeomPara
 
 @dataclass(slots=True)
 class DeploymentsParams(DatetimeParam, FoiObservedpropertyParam, BBoxParam, GeomParam):
+    _parameters = ["f", "id", "q", "limit", "offset", "bbox", "foi", "observedProperty", "system", "geom"]
     system: Optional[List[str]] = None
 
 
 @dataclass(slots=True)
 class ProceduresParams(DatetimeParam, FoiObservedpropertyParam):
+    _parameters = ["f", "id", "q", "limit", "offset", "foi", "observedProperty", "controlledProperty"]
     controlledProperty: Optional[List[str]] = None
 
 
 @dataclass(slots=True)
 class SamplingFeaturesParams(DatetimeParam, FoiObservedpropertyParam, BBoxParam, GeomParam):
+    _parameters = ["f", "id", "q", "limit", "offset", "bbox", "foi", "observedProperty", "controlledProperty", "system",
+                   "geom"]
     controlledProperty: Optional[List[str]] = None
     system: Optional[List[str]] = None
 
 
 @dataclass(slots=True)
 class DatastreamsParams(FoiObservedpropertyParam, ResulttimePhenomenontimeParam):
+    _parameters = ["f", "id", "q", "limit", "offset", "foi", "observedProperty", "system", "phenomenonTime",
+                   "resultTime"]
     system: Optional[List[str]] = None
     schema: Optional[bool] = None
 
 
 @dataclass(slots=True)
 class ObservationsParams(FoiObservedpropertyParam, ResulttimePhenomenontimeParam):
-    system: Optional[List[str]] = None
+    _parameters = ["f", "id", "q", "limit", "offset", "foi", "observedProperty", "datastream", "phenomenonTime",
+                   "resultTime"]
     datastream: Optional[str] = None
 
 
@@ -293,7 +315,11 @@ class ConnectedSystemsPart1Provider(ConnectedSystemsProvider):
         raise NotImplementedError()
 
 
-def parse_query_parameters(out_parameters: CSAParams, input_parameters: Dict):
+def parse_query_parameters(out_parameters: CSAParams, input_parameters: Dict, url: str):
+    """
+    Parse parameter dict into usable/typed parameters
+    """
+
     def _parse_list(identifier):
         setattr(out_parameters,
                 identifier,
@@ -343,6 +369,7 @@ def parse_query_parameters(out_parameters: CSAParams, input_parameters: Dict):
 
     def _parse_time_interval(key):
         raw = input_parameters.get(key)
+        setattr(out_parameters, key, raw)
         # TODO: Support 'latest' qualifier
         now = datetime.utcnow()
         start, end = None, None
@@ -370,7 +397,7 @@ def parse_query_parameters(out_parameters: CSAParams, input_parameters: Dict):
             else:
                 start = raw
                 end = raw
-        setattr(out_parameters, key, (start, end))
+        setattr(out_parameters, "_" + key, (start, end))
 
     parser = {
         "id": _parse_list,
@@ -393,14 +420,13 @@ def parse_query_parameters(out_parameters: CSAParams, input_parameters: Dict):
         "resultTime": _parse_time_interval,
     }
 
+    out_parameters._url = url
     #  TODO: There must be a way to make this more efficient/straightforward..
     # Iterate possible parameters
-    for p in input_parameters:
+    for p in out_parameters._parameters:
         # Check if parameter is supplied as input
-        if p in out_parameters.parameters():
+        if p in input_parameters:
             # Parse value with appropriate mapping function
             parser[p](p)
-        else:
-            raise ProviderInvalidQueryError(f"unrecognized query parameter: {p}")
 
     return out_parameters
