@@ -680,6 +680,14 @@ class CSAPI(API):
                 request.format,
                 'NotFound',
                 "entity not found")
+        except ProviderInvalidQueryError as err:
+            return self.get_exception(
+                HTTPStatus.BAD_REQUEST,
+                headers,
+                request.format,
+                'BadRequest',
+                "bad request: " + err.message)
+
 
     async def _handle_post(
             self,

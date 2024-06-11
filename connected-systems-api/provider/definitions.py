@@ -395,8 +395,9 @@ def parse_query_parameters(out_parameters: CSAParams, input_parameters: Dict, ur
                 start = now
                 end = now
             else:
-                start = raw
-                end = raw
+                ts = datetime.fromisoformat(raw)
+                start = ts
+                end = ts
         setattr(out_parameters, "_" + key, (start, end))
 
     parser = {
@@ -423,10 +424,13 @@ def parse_query_parameters(out_parameters: CSAParams, input_parameters: Dict, ur
     out_parameters._url = url
     #  TODO: There must be a way to make this more efficient/straightforward..
     # Iterate possible parameters
-    for p in out_parameters._parameters:
-        # Check if parameter is supplied as input
-        if p in input_parameters:
-            # Parse value with appropriate mapping function
-            parser[p](p)
+    try:
+        for p in out_parameters._parameters:
+            # Check if parameter is supplied as input
+            if p in input_parameters:
+                # Parse value with appropriate mapping function
+                parser[p](p)
 
-    return out_parameters
+        return out_parameters
+    except Exception as ex:
+        raise ProviderInvalidQueryError(user_msg=str(ex.args))
