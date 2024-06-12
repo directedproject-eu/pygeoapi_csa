@@ -1,6 +1,5 @@
 Babel
 requests~=2.28.2
-quart
 jsonschema
 pydantic~=2.5.1
 urllib3~=1.26.15
@@ -14,3 +13,6 @@ hypercorn[uvloop]
 shapely
 rtree
 tqdm
+
+quart
+quart-cors

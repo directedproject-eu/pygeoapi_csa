@@ -19,6 +19,7 @@ import os.path
 from quart import Quart, request, Request, make_response
 from pygeoapi import flask_app
 from pygeoapi.flask_app import API_RULES, CONFIG, api_, OPENAPI
+from quart_cors import cors
 from werkzeug.datastructures import MultiDict
 
 from api import *
@@ -37,6 +38,15 @@ class CustomQuart(Quart):
 APP = CustomQuart(__name__,
                   static_folder=os.path.join(os.path.dirname(inspect.getmodule(api_).__file__), "static"),
                   static_url_path='/static')
+
+APP.config['QUART_CORS_ALLOW_ORIGIN'] = os.environ.get("CORS_ALLOW_ORIGIN") or ""
+APP.config['QUART_CORS_ALLOW_CREDENTIALS'] = os.environ.get("CORS_ALLOW_CREDENTIALS")
+APP.config['QUART_CORS_ALLOW_METHODS'] = os.environ.get("CORS_ALLOW_METHODS")
+APP.config['QUART_CORS_ALLOW_HEADERS'] = os.environ.get("CORS_ALLOW_HEADERS")
+APP.config['QUART_CORS_EXPOSE_HEADERS'] = os.environ.get("CORS_EXPOSE_HEADERS")
+APP.config['QUART_CORS_MAX_AGE'] = os.environ.get("CORS_MAX_AGE")
+
+APP = cors(APP)
 
 APP.url_map.strict_slashes = API_RULES.strict_slashes
 APP.config['JSONIFY_PRETTYPRINT_REGULAR'] = CONFIG['server'].get('pretty_print', False)
