@@ -1,0 +1,18 @@
+site:
+    title: 52n Software Documentation
+    url: https://docs.52north.org
+    start_page: index.adoc
+output:
+  dir: site
+content:
+    sources:
+     - url: ../../docs-52n-connected-systems
+
+ui:
+    bundle:
+        url: https://gitlab.com/antora/antora-ui-default/-/jobs/artifacts/master/raw/build/ui-bundle.zip?job=bundle-stable
+        snapshot: true
+
+antora:
+  extensions:
+  - '@antora/lunr-extension'

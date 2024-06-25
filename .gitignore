@@ -160,4 +160,4 @@ cython_debug/
 .idea/
 
 # exclude node_modules of supplementary tools
-tools/bundler/node_modules/**
+node_modules/**
