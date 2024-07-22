@@ -1,0 +1,14 @@
+{% extends "_base.html" %}
+{% block title %}{{ super() }} {% trans %}Connected Systems API{% endtrans %} {% endblock %}
+{% block crumbs %}{{ super() }}
+/ <a href="/connected-systems">Connected Systems</a>
+{% for name, val in data["breadcrumbs"] %}
+/ <a href="./{{val}}">{{name}}</a>
+{% endfor %}
+{% endblock %}
+{% block body %}
+
+        <cs-viewer {% for k, v in data["config"].items() %}{{ k }}="{{ v }}" {% endfor %} ></cs-viewer>
+        <script type="module" src="/assets/connected-systems-viewer.js"></script>
+
+{% endblock %}

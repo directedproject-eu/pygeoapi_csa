@@ -30,6 +30,8 @@ class AsyncAPIRequest(APIRequest):
     async def with_data(cls, request, supported_locales) -> Self:
         api_req = cls(request, supported_locales)
         api_req._data = await request.data
+        if request.collection:
+            api_req.collection = request.collection
         return api_req
 
     def is_valid(self, additional_formats=None) -> bool:
@@ -483,60 +485,60 @@ class CSAPI(API):
             self,
             request: AsyncAPIRequest,
             path: Union[Tuple[str, str], None] = None) -> Tuple[dict, int, str]:
-        return await self._handle_get(request,
-                                      path,
-                                      self.csa_provider_part1.query_systems,
-                                      SystemsParams())
+        return await self._get(request,
+                               path,
+                               self.csa_provider_part1.query_systems,
+                               SystemsParams())
 
     @process
     async def get_procedures(
             self,
             request: AsyncAPIRequest,
             path: Union[Tuple[str, str], None] = None) -> Tuple[dict, int, str]:
-        return await self._handle_get(request,
-                                      path,
-                                      self.csa_provider_part1.query_procedures,
-                                      ProceduresParams())
+        return await self._get(request,
+                               path,
+                               self.csa_provider_part1.query_procedures,
+                               ProceduresParams())
 
     @process
     async def get_deployments(
             self,
             request: AsyncAPIRequest,
             path: Union[Tuple[str, str], None] = None) -> Tuple[dict, int, str]:
-        return await self._handle_get(request,
-                                      path,
-                                      self.csa_provider_part1.query_deployments,
-                                      DeploymentsParams())
+        return await self._get(request,
+                               path,
+                               self.csa_provider_part1.query_deployments,
+                               DeploymentsParams())
 
     @process
     async def get_sampling_features(
             self,
             request: AsyncAPIRequest,
             path: Union[Tuple[str, str], None] = None) -> Tuple[dict, int, str]:
-        return await self._handle_get(request,
-                                      path,
-                                      self.csa_provider_part1.query_sampling_features,
-                                      SamplingFeaturesParams())
+        return await self._get(request,
+                               path,
+                               self.csa_provider_part1.query_sampling_features,
+                               SamplingFeaturesParams())
 
     @process
     async def get_properties(
             self,
             request: AsyncAPIRequest,
             path: Union[Tuple[str, str], None] = None) -> Tuple[dict, int, str]:
-        return await self._handle_get(request,
-                                      path,
-                                      self.csa_provider_part1.query_properties,
-                                      CSAParams())
+        return await self._get(request,
+                               path,
+                               self.csa_provider_part1.query_properties,
+                               CSAParams())
 
     @process
     async def get_datastreams(
             self,
             request: AsyncAPIRequest,
             path: Union[Tuple[str, str], None] = None) -> Tuple[dict, int, str]:
-        return await self._handle_get(request,
-                                      path,
-                                      self.csa_provider_part2.query_datastreams,
-                                      DatastreamsParams())
+        return await self._get(request,
+                               path,
+                               self.csa_provider_part2.query_datastreams,
+                               DatastreamsParams())
 
     @process
     async def get_datastreams_schema(
@@ -546,10 +548,10 @@ class CSAPI(API):
         if request.format == FORMAT_TYPES[F_JSON]:
             params = DatastreamsParams()
             params.schema = True
-            return await self._handle_get(request,
-                                          path,
-                                          self.csa_provider_part2.query_datastreams,
-                                          params)
+            return await self._get(request,
+                                   path,
+                                   self.csa_provider_part2.query_datastreams,
+                                   params)
         else:
             return self.get_format_exception(request)
 
@@ -558,10 +560,10 @@ class CSAPI(API):
             self,
             request: AsyncAPIRequest,
             path: Union[Tuple[str, str], None] = None) -> Tuple[dict, int, str]:
-        return await self._handle_get(request,
-                                      path,
-                                      self.csa_provider_part2.query_observations,
-                                      ObservationsParams())
+        return await self._get(request,
+                               path,
+                               self.csa_provider_part2.query_observations,
+                               ObservationsParams())
 
     @process
     async def post_systems(
@@ -569,7 +571,7 @@ class CSAPI(API):
             request: AsyncAPIRequest,
             path: Union[Tuple[str, str], None] = None
     ) -> Tuple[dict, int, str]:
-        return await self._handle_post(
+        return await self._post(
             request,
             "system",
             self.csa_provider_part1,
@@ -582,7 +584,7 @@ class CSAPI(API):
             request: AsyncAPIRequest,
             path: Union[Tuple[str, str], None] = None
     ) -> Tuple[dict, int, str]:
-        return await self._handle_post(
+        return await self._post(
             request,
             "samplingFeature",
             self.csa_provider_part1,
@@ -595,7 +597,7 @@ class CSAPI(API):
             request: AsyncAPIRequest,
             path: Union[Tuple[str, str], None] = None
     ) -> Tuple[dict, int, str]:
-        return await self._handle_post(
+        return await self._post(
             request,
             "deployment",
             self.csa_provider_part1,
@@ -608,7 +610,7 @@ class CSAPI(API):
             request: AsyncAPIRequest,
             path: Union[Tuple[str, str], None] = None
     ) -> Tuple[dict, int, str]:
-        return await self._handle_post(
+        return await self._post(
             request,
             "property",
             self.csa_provider_part1,
@@ -621,7 +623,7 @@ class CSAPI(API):
             request: AsyncAPIRequest,
             path: Union[Tuple[str, str], None] = None
     ) -> Tuple[dict, int, str]:
-        return await self._handle_post(
+        return await self._post(
             request,
             "system_link",
             self.csa_provider_part1,
@@ -634,7 +636,7 @@ class CSAPI(API):
             request: AsyncAPIRequest,
             path: Union[Tuple[str, str], None] = None
     ) -> Tuple[dict, int, str]:
-        return await self._handle_post(
+        return await self._post(
             request,
             "datastream",
             self.csa_provider_part2,
@@ -647,7 +649,7 @@ class CSAPI(API):
             request: AsyncAPIRequest,
             path: Union[Tuple[str, str], None] = None
     ) -> Tuple[dict, int, str]:
-        return await self._handle_post(
+        return await self._post(
             request,
             "observation",
             self.csa_provider_part2,
@@ -660,19 +662,19 @@ class CSAPI(API):
             request: AsyncAPIRequest,
             path: Union[Tuple[str, str], None] = None
     ) -> Tuple[dict, int, str]:
-        return await self._handle_post(
+        return await self._post(
             request,
             "procedure",
             self.csa_provider_part1,
             path
         )
 
-    async def _handle_get(self,
-                          request: AsyncAPIRequest,
-                          path: Union[Tuple[str, str], None],
-                          handler: Callable,
-                          params: CSAParams
-                          ) -> Tuple[dict, int, str]:
+    async def _get(self,
+                   request: AsyncAPIRequest,
+                   path: Union[Tuple[str, str], None],
+                   handler: Callable,
+                   params: CSAParams
+                   ) -> Tuple[dict, int, str]:
         """
         Provide Connected Systems API Collections
 
@@ -711,6 +713,7 @@ class CSAPI(API):
                 collection = False
 
         if request.format == ALLOWED_MIMES.F_HTML.value:
+            #
             return self._format_html_response(request, headers, collection)
 
         #
@@ -735,7 +738,7 @@ class CSAPI(API):
                 'BadRequest',
                 "bad request: " + err.message)
 
-    async def _handle_post(
+    async def _post(
             self,
             request: AsyncAPIRequest,
             collection_name: str,
@@ -812,23 +815,42 @@ class CSAPI(API):
 
     def _format_html_response(self, request, headers, is_collection: bool):
         if is_collection:
-            content = render_j2_template(self.tpl_config,
-                                         'templates/connected-systems/collection.html',
-                                         {
-                                             "viewer": f"{request.path_info}",
-                                             "backend-url": self.base_url + "/"
-                                         },
-                                         request.locale)
+            collection = request.collection
+            data = {
+                "config": {
+                    "collection": f"{request.collection}",
+                    "backend-url": self.base_url + "/",
+                },
+                "breadcrumbs": [
+                    (request.collection, "/")
+                ]
+            }
+            if collection == "subsystems":
+                parent_id = request.params["parent"]
+                data["parent"] = parent_id
+                data["breadcrumbs"] = [
+                    ("systems", "../"),
+                    (parent_id, f"../{parent_id}"),
+                    (request.collection, "subsystems")
+                ]
         else:
             collection, id = request.path_info.split("/")
-            content = render_j2_template(self.tpl_config,
-                                         'templates/connected-systems/item.html',
-                                         {
-                                             "viewer": collection,
-                                             "backend-url": self.base_url + "/",
-                                             "id": id
-                                         },
-                                         request.locale)
+            data = {
+                "config": {
+                    "collection": collection,
+                    "backend-url": self.base_url + "/",
+                    "id": id
+                },
+                "breadcrumbs": [
+                    (request.collection, "."),
+                    (id, id)
+                ]
+            }
+
+        content = render_j2_template(self.tpl_config,
+                                     'templates/connected-systems/viewer.html',
+                                     data,
+                                     request.locale)
         return headers, HTTPStatus.OK, content
 
     def _format_json_response(self, request, headers, data, is_collection: bool) -> Tuple[dict, int, str]:

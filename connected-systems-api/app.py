@@ -62,27 +62,32 @@ csapi_ = CSAPI(CONFIG, OPENAPI)
 
 @APP.route('/')
 async def landing_page():
+    request.collection = ""
     return await get_response(await csapi_.landing_page(request))
 
 
 @APP.route('/assets/<path:filename>')
 async def assets(filename):
+    request.collection = None
     return await send_from_directory("templates/connected-systems/assets", filename)
 
 
 @APP.route('/openapi')
 def openapi():
+    request.collection = None
     return flask_app.openapi()
 
 
 @APP.route('/conformance')
 async def conformance():
+    request.collection = None
     return await get_response(await csapi_.conformance(request))
 
 
 @APP.route('/collections')
 @APP.route('/collections/<path:collection_id>')
 async def collections(collection_id: str = None):
+    request.collection = None
     """
     OGC API collections endpoint
 
@@ -111,6 +116,7 @@ async def collections(collection_id: str = None):
 @APP.route('/collections/<path:collection_id>/items')
 @APP.route('/collections/<path:collection_id>/items/<path:item_id>')
 async def collection_items(collection_id: str, item_id: str = None):
+    request.collection = None
     # TODO: what if a collection contains Non-CSA Entities as well as CSA entities?
     # TODO: For now assume that collections are either CSA or not
 
@@ -130,6 +136,7 @@ async def collection_items(collection_id: str, item_id: str = None):
 
 @APP.route('/connected-systems/')
 async def csa_catalog_root():
+    request.collection = None
     """
     Connected Systems API root endpoint
 
@@ -141,6 +148,7 @@ async def csa_catalog_root():
 @APP.route('/systems', methods=['GET', 'POST'])
 @APP.route('/systems/<path:path>', methods=['GET', 'PUT', 'DELETE'])
 async def systems_path(path=None):
+    request.collection = "systems"
     """
     Connect Systems API path endpoint
 
@@ -168,9 +176,10 @@ async def systems_path(path=None):
 @APP.route('/systems/<path:path>/samplingFeatures', methods=['GET', 'POST'])
 @APP.route('/systems/<path:path>/datastreams', methods=['GET', 'POST'])
 async def systems_subpath(path=None):
-    property = request.path.split('/')[-1]
+    collection = request.path.split('/')[-1]
+    request.collection = collection
     if request.method == 'GET':
-        match property:
+        match collection:
             case "subsystems":
                 return await get_response(await csapi_.get_systems(request, ("parent", path)))
             case "deployments":
@@ -180,7 +189,7 @@ async def systems_subpath(path=None):
             case "datastreams":
                 return await get_response(await csapi_.get_datastreams(request, ("system", path)))
     elif request.method == 'POST':
-        match property:
+        match collection:
             case "subsystems":
                 return await get_response(await csapi_.post_systems(request, ("parent", path)))
             case "samplingFeatures":
@@ -192,6 +201,7 @@ async def systems_subpath(path=None):
 @APP.route('/procedures', methods=['GET', 'POST'])
 @APP.route('/procedures/<path:path>', methods=['GET', 'PUT', 'DELETE'])
 async def procedures_path(path=None):
+    request.collection = "procedures"
     if request.method == 'GET':
         if path is not None:
             return await get_response(await csapi_.get_procedures(request, ("id", path)))
@@ -210,6 +220,7 @@ async def procedures_path(path=None):
 @APP.route('/deployments', methods=['GET', 'POST'])
 @APP.route('/deployments/<path:path>', methods=['GET', 'PUT', 'DELETE'])
 async def deployments_path(path=None):
+    request.collection = "deployments"
     if request.method == 'GET':
         if path is not None:
             return await get_response(await csapi_.get_deployments(request, ("id", path)))
@@ -225,21 +236,24 @@ async def deployments_path(path=None):
         return await get_response((None, HTTPStatus.NOT_IMPLEMENTED, ""))
 
 
-@APP.route('/deployments/<path:path>/systems', methods=['GET', 'POST'])
-async def deployments_subpath(path):
-    if request.method == 'GET':
-        return await get_response(await csapi_.get_systems(request, ("system", path)))
-    elif request.method == 'POST':
-        if request.content_type is not None:
-            if request.content_type == 'application/json':
-                return await get_response(await csapi_.post_systems_to_deployment(request, ("deplyoment", path)))
-            else:
-                return await get_response((None, HTTPStatus.BAD_REQUEST, ""))
+# @APP.route('/deployments/<path:path>/systems', methods=['GET', 'POST'])
+# async def deployments_subpath(path):
+#     request.collection = "systems"
+#     if request.method == 'GET':
+#         return await get_response(await csapi_.get_systems(request, ("system", path)))
+#     elif request.method == 'POST':
+#         if request.content_type is not None:
+#             if request.content_type == 'application/json':
+#                 return await get_response(await csapi_.post_systems_to_deployment(request, ("deplyoment", path)))
+#             else:
+#                 return await get_response((None, HTTPStatus.BAD_REQUEST, ""))
+
 
 
 @APP.route('/samplingFeatures', methods=['GET'])
 @APP.route('/samplingFeatures/<path:path>', methods=['GET', 'PUT', 'DELETE'])
 async def properties_path(path=None):
+    request.collection = "samplingFeatures"
     if request.method == 'GET':
         if path is not None:
             return await get_response(await csapi_.get_sampling_features(request, ("id", path)))
@@ -252,6 +266,7 @@ async def properties_path(path=None):
 @APP.route('/properties', methods=['GET', 'POST'])
 @APP.route('/properties/<path:path>', methods=['GET', 'PUT', 'DELETE'])
 async def properties_subpath(path=None):
+    request.collection = "properties"
     if request.method == 'GET':
         if path is not None:
             return await get_response(await csapi_.get_properties(request, ("id", path)))
@@ -266,6 +281,7 @@ async def properties_subpath(path=None):
 @APP.route('/datastreams', methods=['GET'])
 @APP.route('/datastreams/<path:path>', methods=['GET', 'PUT', 'DELETE'])
 async def datastreams_path(path=None):
+    request.collection = "datastreams"
     if request.method == 'GET':
         if path is not None:
             return await get_response(await csapi_.get_datastreams(request, ("id", path)))
@@ -279,6 +295,7 @@ async def datastreams_path(path=None):
 @APP.route('/datastreams/<path:path>/observations', methods=['GET', 'POST'])
 async def datastreams_subpath(path=None):
     property = request.path.split('/')[-1]
+    request.collection = property
     if request.method == 'GET':
         if property == "schema":
             return await get_response(await csapi_.get_datastreams_schema(request, ("id", path)))
@@ -293,6 +310,7 @@ async def datastreams_subpath(path=None):
 @APP.route('/observations', methods=['GET'])
 @APP.route('/observations/<path:path>', methods=['GET', 'PUT', 'DELETE'])
 async def observations_path(path=None):
+    request.collection = "observations"
     if request.method == 'GET':
         if path is not None:
             return await get_response(await csapi_.get_observations(request, ("id", path)))
