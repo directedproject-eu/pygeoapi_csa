@@ -142,7 +142,7 @@ async def search(es: AsyncElasticsearch,
     if count > 0:
         links = []
 
-        if count == int(parameters.limit):
+        if count >= parameters.limit + parameters.offset:
             links.append({
                 "title": "next",
                 "rel": "next",

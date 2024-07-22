@@ -1,0 +1,13 @@
+{% extends "_base.html" %}
+{% block title %}{{ super() }} {% trans %}Connected Systems API{% endtrans %} {% endblock %}
+{% block crumbs %}{{ super() }}
+/ <a href="/connected-systems">{% trans %}Connected Systems API{% endtrans %}</a>
+{% endblock %}
+{% block body %}
+
+        <!-- Will be made available by the script below -->
+        <cs-viewer backend-url="{{ data['backend-url'] }}" collection="{{ data['viewer'] }}"></cs-viewer>
+        <!-- Replace PUBLIC_URL with the hostname and path of the script -->
+        <script type="module" src="/assets/connected-systems-viewer.js"></script>
+
+{% endblock %}

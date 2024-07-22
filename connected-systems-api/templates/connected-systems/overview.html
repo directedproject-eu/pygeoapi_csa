@@ -1,0 +1,83 @@
+{% extends "_base.html" %}
+{% block title %}{{ super() }} {% trans %}Connected Systems API{% endtrans %} {% endblock %}
+{% block crumbs %}{{ super() }}
+/ <a href="./connected-systems">{% trans %}Connected Systems API{% endtrans %}</a>
+{% endblock %}
+{% block body %}
+
+<section id="identification">
+    <h4>{% trans %}Connected Systems API{% endtrans %}: {{ data['csa_version'] }} - Resources</h4>
+</section>
+
+Top-Level Resources provided by the Connected Systems API.
+<div>
+    {% for v in data["resources"] %}
+    <table class="table table-bordered">
+        <thead>
+        <tr>
+            <th style="width: 15%">
+                Name
+            </th>
+            <th>
+                {{ v['name'] }}
+            </th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr>
+            <td>
+                Description
+            </td>
+            <td>
+                {{ v['description'] }}
+            </td>
+        </tr>
+        <tr>
+            <td>
+                Link
+            </td>
+            <td>
+                <a href="./{{ v['collection_name'] }}">{{ v['name'] }}</a>
+            </td>
+        </tr>
+        <tr>
+            <td>
+                Specification
+            </td>
+            <td>
+                <a href="{{ v['specification'] }}">OpenAPI Specification</a>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+    {% endfor %}
+</div>
+
+<section id="collections">
+    <h2>API-Examples</h2>
+    Example Requests to API. See OpenAPI Specification for details.
+    <table class="table table-striped table-bordered">
+        <thead>
+        <tr>
+            <th>{% trans %}Name{% endtrans %}</th>
+            <th>{% trans %}Format{% endtrans %}</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for v in data["endpoints"] %}
+        <tr>
+            <td data-label="name">
+                <a title="{{ v['title'] | striptags | truncate }}"
+                   href="{{ v['href'] }}">
+                    <span>{{ v['title'] | striptags | truncate }}</span></a>
+            </td>
+            <td data-label="format">
+                {{ v['type'] }}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+{% endblock %}

@@ -32,6 +32,15 @@ class AsyncAPIRequest(APIRequest):
         api_req._data = await request.data
         return api_req
 
+    def is_valid(self, additional_formats=None) -> bool:
+        if not self._format:
+            return True
+        if self._format in ALLOWED_MIMES:
+            return True
+        if self._format in (f.lower() for f in (additional_formats or ())):
+            return True
+        return False
+
 
 def process(func):
     """
@@ -320,8 +329,7 @@ class CSAPI(API):
 
         content = {
             'id': id_,
-            'type': 'Catalog',
-            'version': version,
+            'csa_version': version,
             'title': l10n.translate(
                 self.config['metadata']['identification']['title'],
                 request.locale),
@@ -329,7 +337,59 @@ class CSAPI(API):
                 self.config['metadata']['identification']['description'],
                 request.locale),
             'links': [],
-            'endpoints': []
+            'endpoints': [],
+            'resources': [
+                {
+                    "collection_name": "systems",
+                    "name": "Systems",
+                    "description": "Systems are entities that can produce data feeds and/or receive commands (e.g. "
+                                   "sensors and sensor networks, platforms, actuators, processing components, "
+                                   "etc.). Many systems can be classified as 'observing systems' that produce "
+                                   "observations of one or more features of interest.",
+                    "specification": "https://opengeospatial.github.io/ogcapi-connected-systems/redoc/?url=../api"
+                                     "/part1/openapi/openapi-connectedsystems-1.yaml#tag/Systems"
+                },
+                {
+                    "collection_name": "deployments",
+                    "name": "Deployments",
+                    "description": "Deployments describe how systems are being deployed at a particular place and time.",
+                    "specification": "https://opengeospatial.github.io/ogcapi-connected-systems/redoc/?url=../api"
+                                     "/part1/openapi/openapi-connectedsystems-1.yaml#tag/Deployments"
+                },
+                {
+                    "collection_name": "procedures",
+                    "name": "Procedures",
+                    "description": "Procedures provide information about the behavior of a system to accomplish its "
+                                   "task(s). Procedures include descriptions of system kinds (e.g. a hardware "
+                                   "device's datasheet), as well as methodologies or specific configurations of these "
+                                   "systems (e.g. steps followed by an operator to accomplish a sensing or sampling "
+                                   "task).",
+                    "specification": "https://opengeospatial.github.io/ogcapi-connected-systems/redoc/?url=../api"
+                                     "/part1/openapi/openapi-connectedsystems-1.yaml#tag/Procedures"
+                },
+                {
+                    "collection_name": "samplingFeatures",
+                    "name": "Sampling Features",
+                    "description": "Sampling Features link Systems with ultimate features of interest, describing "
+                                   "exactly what part of a larger feature is being interacted with.",
+                    "specification": "https://opengeospatial.github.io/ogcapi-connected-systems/redoc/?url=../api"
+                                     "/part1/openapi/openapi-connectedsystems-1.yaml#tag/Sampling-Features"
+                },
+                {
+                    "collection_name": "properties",
+                    "name": "Properties",
+                    "description": "Property resources provide the definitions of derived properties that are used "
+                                   "throughout the API. Derived properties are specific to a type of feature, "
+                                   "a type of system, or even to a particular organization, project or deployment. "
+                                   "Property definitions are referenced by feature schemas, system and deployment "
+                                   "descriptions, datastream and control stream schemas, etc. Depending on the "
+                                   "context they are used in, they can represent properties that are asserted (e.g. "
+                                   "system characteristic), observed (observed or observable property) or controlled "
+                                   "(controlled or controllable property).",
+                    "specification": "https://opengeospatial.github.io/ogcapi-connected-systems/redoc/?url=../api"
+                                     "/part1/openapi/openapi-connectedsystems-1.yaml#tag/Properties"
+                }
+            ]
         }
 
         collections = filter_dict_by_key_value(self.config['dynamic-resources'], 'type', 'connected-systems')
@@ -350,82 +410,69 @@ class CSAPI(API):
             'title': f'Systems',
             'href': f'{url}/systems?f={FORMAT_TYPES[F_JSON].replace("+", "%2B")}',
             'type': F_JSON,
-            'description': "Systems"
+        })
+
+        content['endpoints'].append({
+            'title': f'Systems',
+            'href': f'{url}/systems?f={ALLOWED_MIMES.F_SMLJSON.value.replace("+", "%2B")}',
+            'type': ALLOWED_MIMES.F_SMLJSON.value,
         })
         content['endpoints'].append({
             'title': f'Systems',
-            'href': f'{url}/systems?f={FORMAT_TYPES[F_SENSORML_JSON].replace("+", "%2B")}',
-            'type': F_SENSORML_JSON,
-            'description': "Systems"
-        })
-        content['endpoints'].append({
-            'title': f'Systems',
-            'href': f'{url}/systems?f={FORMAT_TYPES[F_GEOJSON].replace("+", "%2B")}',
-            'type': F_GEOJSON,
-            'description': "Systems"
+            'href': f'{url}/systems?f={ALLOWED_MIMES.F_GEOJSON.value.replace("+", "%2B")}',
+            'type': ALLOWED_MIMES.F_GEOJSON.value,
         })
         content['endpoints'].append({
             'title': f'Procedures',
-            'href': f'{url}/procedures?f={FORMAT_TYPES[F_GEOJSON].replace("+", "%2B")}',
-            'type': F_GEOJSON,
-            'description': "Procedures provides information about the procedure implemented by a system to accomplish "
-                           "its task(s)."
+            'href': f'{url}/procedures?f={ALLOWED_MIMES.F_GEOJSON.value.replace("+", "%2B")}',
+            'type': ALLOWED_MIMES.F_GEOJSON.value,
         })
         content['endpoints'].append({
             'title': f'Procedures',
-            'href': f'{url}/procedures?f={FORMAT_TYPES[F_SENSORML_JSON].replace("+", "%2B")}',
-            'type': F_SENSORML_JSON,
-            'description': "Procedures provides information about the procedure implemented by a system to accomplish "
-                           "its task(s)."
+            'href': f'{url}/procedures?f={ALLOWED_MIMES.F_SMLJSON.value.replace("+", "%2B")}',
+            'type': ALLOWED_MIMES.F_SMLJSON.value,
         })
 
         content['endpoints'].append({
             'title': f'Deployments',
-            'href': f'{url}/deployments?f={FORMAT_TYPES[F_GEOJSON].replace("+", "%2B")}',
-            'type': F_GEOJSON,
-            'description': "Deployments describe how systems are being deployed at a particular place and time."
+            'href': f'{url}/deployments?f={ALLOWED_MIMES.F_GEOJSON.value.replace("+", "%2B")}',
+            'type': ALLOWED_MIMES.F_GEOJSON.value,
         })
         content['endpoints'].append({
             'title': f'Deployments',
-            'href': f'{url}/deployments?f={FORMAT_TYPES[F_SENSORML_JSON].replace("+", "%2B")}',
-            'type': F_SENSORML_JSON,
-            'description': "Deployments describe how systems are being deployed at a particular place and time."
+            'href': f'{url}/deployments?f={ALLOWED_MIMES.F_SMLJSON.value.replace("+", "%2B")}',
+            'type': ALLOWED_MIMES.F_SMLJSON.value,
         })
 
         content['endpoints'].append({
             'title': f'SamplingFeatures',
-            'href': f'{url}/samplingFeatures?f={FORMAT_TYPES[F_GEOJSON].replace("+", "%2B")}',
-            'type': F_GEOJSON,
-            'description': "Sampling Features link Systems with ultimate features of interest, describing exactly what part of a larger feature is being interacted with."
+            'href': f'{url}/samplingFeatures?f={ALLOWED_MIMES.F_GEOJSON.value.replace("+", "%2B")}',
+            'type': ALLOWED_MIMES.F_GEOJSON.value,
         })
         content['endpoints'].append({
             'title': f'Properties',
-            'href': f'{url}/properties?f={FORMAT_TYPES[F_SENSORML_JSON].replace("+", "%2B")}',
-            'type': F_SENSORML_JSON,
-            'description': "List or search all Property resources available from this server endpoint."
+            'href': f'{url}/properties?f={ALLOWED_MIMES.F_SMLJSON.value.replace("+", "%2B")}',
+            'type': ALLOWED_MIMES.F_SMLJSON.value,
         })
         content['endpoints'].append({
             'title': f'Datastreams',
-            'href': f'{url}/datastreams?f={FORMAT_TYPES[F_JSON].replace("+", "%2B")}',
+            'href': f'{url}/datastreams?f={F_JSON.replace("+", "%2B")}',
             'type': F_JSON,
-            'description': "Datastreams allow access to observations produced by systems, in various formats."
         })
         content['endpoints'].append({
             'title': f'Observations',
-            'href': f'{url}/observations?f={FORMAT_TYPES[F_OM_JSON].replace("+", "%2B")}',
-            'type': F_OM_JSON,
-            'description': "List or search all observations available from this server endpoint."
+            'href': f'{url}/observations?f={ALLOWED_MIMES.F_OMJSON.value.replace("+", "%2B")}',
+            'type': ALLOWED_MIMES.F_OMJSON.value,
         })
         content['endpoints'].append({
             'title': f'Observations',
-            'href': f'{url}/observations?f={FORMAT_TYPES[F_SWE_JSON].replace("+", "%2B")}',
-            'type': F_SWE_JSON,
-            'description': "List or search all observations available from this server endpoint."
+            'href': f'{url}/observations?f={ALLOWED_MIMES.F_SMLJSON.value.replace("+", "%2B")}',
+            'type': ALLOWED_MIMES.F_SWEJSON.value,
         })
 
         if request.format == F_HTML:  # render
             content = render_j2_template(self.tpl_config,
-                                         'templates/connected-systems/collection/overview.html',
+                                         'templates/connected-systems/overview.html',
                                          content, request.locale)
             return headers, HTTPStatus.OK, content
 
@@ -466,13 +513,10 @@ class CSAPI(API):
             self,
             request: AsyncAPIRequest,
             path: Union[Tuple[str, str], None] = None) -> Tuple[dict, int, str]:
-        if request.format == FORMAT_TYPES[F_JSON] or request.format == FORMAT_TYPES[F_GEOJSON]:
-            return await self._handle_get(request,
-                                          path,
-                                          self.csa_provider_part1.query_sampling_features,
-                                          SamplingFeaturesParams())
-        else:
-            return self.get_format_exception(request)
+        return await self._handle_get(request,
+                                      path,
+                                      self.csa_provider_part1.query_sampling_features,
+                                      SamplingFeaturesParams())
 
     @process
     async def get_properties(
@@ -645,13 +689,13 @@ class CSAPI(API):
 
         if not request.is_valid(FORMAT_TYPES.values()):
             return self.get_format_exception(request)
-        headers = request.get_response_headers(**self.api_headers)
+        headers = request.get_response_headers(**self.api_headers, force_type=request.format)
 
         collection = True
         # Expand parameters with additional information based on path
         if path is not None:
             # Check that id is not malformed.
-            if not re.match("^[\w-]+$", path[1]):
+            if not re.match("^[\\w-]+$", path[1]):
                 return self.get_exception(
                     HTTPStatus.BAD_REQUEST,
                     headers,
@@ -666,13 +710,16 @@ class CSAPI(API):
             if path[0] == "id":
                 collection = False
 
-        # parse parameters
+        if request.format == ALLOWED_MIMES.F_HTML.value:
+            return self._format_html_response(request, headers, collection)
+
+        #
         try:
             parameters = parse_query_parameters(params, request.params, self.base_url + "/" + request.path_info)
             parameters.format = request.format
             data = await handler(parameters)
 
-            return self._format_csa_response(request, headers, data, collection)
+            return self._format_json_response(request, headers, data, collection)
         except ProviderItemNotFoundError:
             return self.get_exception(
                 HTTPStatus.NOT_FOUND,
@@ -687,7 +734,6 @@ class CSAPI(API):
                 request.format,
                 'BadRequest',
                 "bad request: " + err.message)
-
 
     async def _handle_post(
             self,
@@ -760,39 +806,46 @@ class CSAPI(API):
             parameters = parse_query_parameters(CollectionParams(), request_params,
                                                 self.base_url + "/" + request.path_info)
             data = await self.csa_provider_part1.query_collection_items(collection_id, parameters)
-            return self._format_csa_response(request, headers, data, item_id is None)
+            return self._format_json_response(request, headers, data, item_id is None)
         except ProviderItemNotFoundError:
             return headers, HTTPStatus.NOT_FOUND, ""
 
-    def _format_csa_response(self, request, headers, data, is_collection: bool) -> Tuple[dict, int, str]:
-        if FORMAT_TYPES.get(request.format):
-            headers['Content-Type'] = FORMAT_TYPES.get(request.format)
-
-        if data is None:
-            return headers, HTTPStatus.NOT_FOUND, ""
-
-        if len(data[0]) == 0:
-            return headers, HTTPStatus.OK, "[]"
-
-        if request.format == F_GEOJSON:
-            response = {
-                "type": "FeatureCollection",
-                "features": [item for item in data[0]],
-                "links": [link for link in data[1]],
-            } if is_collection else data[0][0]
-            return headers, HTTPStatus.OK, to_json(response, self.pretty_print)
+    def _format_html_response(self, request, headers, is_collection: bool):
+        if is_collection:
+            content = render_j2_template(self.tpl_config,
+                                         'templates/connected-systems/collection.html',
+                                         {
+                                             "viewer": f"{request.path_info}",
+                                             "backend-url": self.base_url + "/"
+                                         },
+                                         request.locale)
         else:
-            response = {
-                "items": [item for item in data[0]],
-                "links": [link for link in data[1]],
-            } if is_collection else data[0][0]
-            if request.format == F_HTML:
-                # Some nicer formatting
-                pretty = f"""
-                <html><body><pre><code>
-                {to_json(response, True)}
-                </code></pre></body></html>
-                """
-                return headers, HTTPStatus.OK, pretty
-            else:
+            collection, id = request.path_info.split("/")
+            content = render_j2_template(self.tpl_config,
+                                         'templates/connected-systems/item.html',
+                                         {
+                                             "viewer": collection,
+                                             "backend-url": self.base_url + "/",
+                                             "id": id
+                                         },
+                                         request.locale)
+        return headers, HTTPStatus.OK, content
+
+    def _format_json_response(self, request, headers, data, is_collection: bool) -> Tuple[dict, int, str]:
+        match request.format:
+            case ALLOWED_MIMES.F_GEOJSON.value:
+                if data is None:
+                    return headers, HTTPStatus.NOT_FOUND, ""
+                response = {
+                    "type": "FeatureCollection",
+                    "features": [item for item in data[0]],
+                    "links": [link for link in data[1]],
+                } if is_collection else data[0][0]
+                return headers, HTTPStatus.OK, to_json(response, self.pretty_print)
+            case _:
+                response = {
+                    "items": [item for item in data[0]],
+                    "links": [link for link in data[1]],
+                } if is_collection else data[0][0]
+
                 return headers, HTTPStatus.OK, to_json(response, self.pretty_print)

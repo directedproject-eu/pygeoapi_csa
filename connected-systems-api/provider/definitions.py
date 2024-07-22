@@ -16,6 +16,7 @@
 import dataclasses
 import urllib.parse
 from dataclasses import dataclass
+from enum import Enum
 from typing import List, Optional, Dict, Tuple, TypeAlias
 from datetime import datetime
 from collections import OrderedDict
@@ -27,31 +28,20 @@ TimeInterval: TypeAlias = Tuple[Optional[datetime], Optional[datetime]]
 CSAGetResponse: TypeAlias = Tuple[List[Dict], List[Dict]] | None
 CSACrudResponse: TypeAlias = List[str]
 
-F_SWE_JSON = 'swejson'
-F_OM_JSON = 'omjson'
-F_HTML = 'html'
-F_GEOJSON = 'geojson'
-F_SENSORML_JSON = 'smljson'
 
-FORMAT_TYPES = OrderedDict((
-    (F_HTML, 'text/html'),
-    (F_GEOJSON, 'application/geo+json'),
-    (F_JSONLD, 'application/ld+json'),
-    (F_JSON, 'application/json'),
-    (F_SENSORML_JSON, 'application/sml+json'),
-    (F_SWE_JSON, 'application/swe+json'),
-    (F_OM_JSON, 'application/om+json'),
-    ('application/sml+json', 'application/sml+json'),
-    ('application/swe+json', 'application/swe+json'),
-    ('application/om+json', 'application/om+json')
-))
+class ALLOWED_MIMES(Enum):
+    F_HTML = "html"
+    F_GEOJSON = "application/geo+json"
+    F_SMLJSON = "application/sml+json"
+    F_OMJSON = "application/om+json"
+    F_SWEJSON = "application/swe+json"
 
 
 @dataclass
 class CSAParams:
     _parameters = ["f", "id", "q", "limit", "offset"]
     _url: str = None
-    f: str = None  # format
+    f: ALLOWED_MIMES = ALLOWED_MIMES.F_HTML  # format
     id: List[str] = None
     q: Optional[List[str]] = None
     limit: int = 10

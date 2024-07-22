@@ -16,7 +16,7 @@
 import inspect
 import os.path
 
-from quart import Quart, request, Request, make_response
+from quart import Quart, request, Request, make_response, send_from_directory
 from pygeoapi import flask_app
 from pygeoapi.flask_app import API_RULES, CONFIG, api_, OPENAPI
 from quart_cors import cors
@@ -63,6 +63,11 @@ csapi_ = CSAPI(CONFIG, OPENAPI)
 @APP.route('/')
 async def landing_page():
     return await get_response(await csapi_.landing_page(request))
+
+
+@APP.route('/assets/<path:filename>')
+async def assets(filename):
+    return await send_from_directory("templates/connected-systems/assets", filename)
 
 
 @APP.route('/openapi')
@@ -158,28 +163,30 @@ async def systems_path(path=None):
                 return await get_response((None, HTTPStatus.NOT_IMPLEMENTED, ""))
 
 
-@APP.route('/systems/<path:path>/members', methods=['GET', 'POST'])
+@APP.route('/systems/<path:path>/subsystems', methods=['GET', 'POST'])
 @APP.route('/systems/<path:path>/deployments', methods=['GET'])
 @APP.route('/systems/<path:path>/samplingFeatures', methods=['GET', 'POST'])
 @APP.route('/systems/<path:path>/datastreams', methods=['GET', 'POST'])
 async def systems_subpath(path=None):
     property = request.path.split('/')[-1]
     if request.method == 'GET':
-        if property == "members":
-            return await get_response(await csapi_.get_systems(request, ("parent", path)))
-        elif property == "deployments":
-            return await get_response(await csapi_.get_deployments(request, ("system", path)))
-        elif property == "samplingFeatures":
-            return await get_response(await csapi_.get_sampling_features(request, ("system", path)))
-        elif property == "datastreams":
-            return await get_response(await csapi_.get_datastreams(request, ("system", path)))
+        match property:
+            case "subsystems":
+                return await get_response(await csapi_.get_systems(request, ("parent", path)))
+            case "deployments":
+                return await get_response(await csapi_.get_deployments(request, ("system", path)))
+            case "samplingFeatures":
+                return await get_response(await csapi_.get_sampling_features(request, ("system", path)))
+            case "datastreams":
+                return await get_response(await csapi_.get_datastreams(request, ("system", path)))
     elif request.method == 'POST':
-        if property == "members":
-            return await get_response(await csapi_.post_systems(request, ("parent", path)))
-        elif property == "samplingFeatures":
-            return await get_response(await csapi_.post_sampling_feature(request, ("system", path)))
-        elif property == "datastreams":
-            return await get_response(await csapi_.post_datastreams(request, ("system", path)))
+        match property:
+            case "subsystems":
+                return await get_response(await csapi_.post_systems(request, ("parent", path)))
+            case "samplingFeatures":
+                return await get_response(await csapi_.post_sampling_feature(request, ("system", path)))
+            case "datastreams":
+                return await get_response(await csapi_.post_datastreams(request, ("system", path)))
 
 
 @APP.route('/procedures', methods=['GET', 'POST'])
