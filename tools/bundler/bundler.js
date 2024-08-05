@@ -119,3 +119,4 @@ await (get_bundle(baseUrl + 'api/part1/openapi/schemas/sensorml/procedure.json',
 await (get_bundle(baseUrl + 'api/part1/openapi/schemas/geojson/anySamplingFeature.json', "bundles/samplingFeature.schema"))
 await (get_bundle(baseUrl + 'api/part1/openapi/schemas/sensorml/property.json', "bundles/property.schema"))
 await (get_bundle(baseUrl + 'api/part2/openapi/schemas/json/dataStream.json', "bundles/datastream.schema"))
+await (get_bundle(baseUrl + 'api/part2/openapi/schemas/json/observation.json', "bundles/observation.schema"))
