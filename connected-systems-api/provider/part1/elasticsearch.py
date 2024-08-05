@@ -21,23 +21,21 @@ import uuid
 from typing import Dict, List, Union, Coroutine, Tuple
 
 from elasticsearch import AsyncElasticsearch
-from elasticsearch_dsl import Search
+from elasticsearch_dsl import Search, AsyncSearch
 
 from pygeoapi.provider.base import ProviderConnectionError, ProviderQueryError, ProviderInvalidDataError, \
-    ProviderGenericError
+    ProviderGenericError, ProviderInvalidQueryError
 
 from ..definitions import ConnectedSystemsPart1Provider, CSACrudResponse, SystemsParams, \
     CSAGetResponse, DeploymentsParams, ProceduresParams, SamplingFeaturesParams, CSAParams, CollectionParams
 
-from ..connector_elastic import connect_elasticsearch, ElasticSearchConfig, parse_csa_params, parse_spatial_params, \
-    parse_datetime_params, create_many, search, setup_elasticsearch
+from ..connector_elastic import ElasticsearchConnector, ElasticSearchConfig, parse_csa_params, parse_spatial_params, \
+    parse_datetime_params
 
 LOGGER = logging.getLogger(__name__)
 
 
-class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider):
-    _es: AsyncElasticsearch = None
-
+class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchConnector):
     collections_index_name = "collections"
     systems_index_name = "systems"
     deployments_index_name = "deployments"
@@ -132,21 +130,20 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider):
         ]
 
     async def open(self):
-        self._es: AsyncElasticsearch = await connect_elasticsearch(self._es_config)
+        await self.connect_elasticsearch(self._es_config)
 
     async def setup(self):
-        await setup_elasticsearch(self._es,
-                                  [(self.systems_index_name, self.system_mappings),
-                                   (self.collections_index_name, None),
-                                   (self.procedures_index_name,
-                                    self.procedures_mappings),
-                                   (self.deployments_index_name,
-                                    self.deployments_mappings),
-                                   (self.properties_index_name,
-                                    self.properties_mappings),
-                                   (self.samplingfeatures_index_name,
-                                    self.samplingfeatures_mappings),
-                                   ])
+        await self.setup_elasticsearch([(self.systems_index_name, self.system_mappings),
+                                        (self.collections_index_name, None),
+                                        (self.procedures_index_name,
+                                         self.procedures_mappings),
+                                        (self.deployments_index_name,
+                                         self.deployments_mappings),
+                                        (self.properties_index_name,
+                                         self.properties_mappings),
+                                        (self.samplingfeatures_index_name,
+                                         self.samplingfeatures_mappings),
+                                        ])
         await self.__create_mandatory_collections()
 
     async def close(self):
@@ -295,7 +292,7 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider):
         ]
 
         for coll in mandatory:
-            query = Search(using=self._es, index=self.collections_index_name)
+            query = AsyncSearch(using=self._es, index=self.collections_index_name)
             query = query.filter("term", id=coll["id"])
             result = (await self._es.search(index=self.collections_index_name, body=query.to_dict()))["hits"]
             if len(result["hits"]) == 0:
@@ -305,14 +302,93 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider):
                                      refresh=True)
             LOGGER.critical(f"creating mandatory collection {coll['id']}")
 
+    async def delete(self, type: str, identifier: str, cascade: bool = False):
+        print(f"deleting {type} {identifier}")
+        match type:
+            case "system":
+                if not cascade:
+                    # /req/create-replace-delete/system
+                    # reject if there are nested resources: subsystems, sampling features, datastreams, control streams
+                    query = AsyncSearch(using=self._es)
+                    error_msg = f"cannot delete system with nested resources and cascade=false. "
+                    f"ref: /req/create-replace-delete/system"
+
+                    # TODO: Should we run all these checks in parallel or is it more efficient to sync + exit early?
+                    # check subsystems
+                    if await self._exists(Search(using=self._es)
+                                                  .index(self.systems_index_name)
+                                                  .filter("term", parent=identifier)):
+                        raise ProviderInvalidQueryError(user_msg=error_msg)
+
+                    # check deployments
+                    if await self._exists(Search(using=self._es)
+                                                  .index(self.deployments_index_name)
+                                                  .filter("term", system=identifier)):
+                        raise ProviderInvalidQueryError(user_msg=error_msg)
+
+                    # check sampling features
+                    if await self._exists(Search(using=self._es)
+                                                  .index(self.samplingfeatures_index_name)
+                                                  .filter("term", system=identifier)):
+                        raise ProviderInvalidQueryError(user_msg=error_msg)
+
+                    # if self._provider_part2:
+                    #
+
+                    await self._delete(self.systems_index_name, identifier)
+                else:
+                    # blocked-by: https://github.com/opengeospatial/ogcapi-connected-systems/issues/61
+                    # /req/create-replace-delete/system-delete-cascade
+                    # async with asyncio.TaskGroup() as tg:
+                    #     # recursively delete subsystems with all their associated entities
+                    #     subsystems = (AsyncSearch(using=self._es)
+                    #                   .index(self.systems_index_name)
+                    #                   .filter("term", parent=identifier)
+                    #                   .source(False)
+                    #                   .scan())
+                    #     #async for subsystem in subsystems:
+                    #     #    tg.create_task(self.delete("system", subsystem.meta.id, True))
+                    #     print((AsyncSearch(using=self._es)
+                    #      .index(self.deployments_index_name)
+                    #      .filter("term", system=identifier)
+                    #      .source(False)).to_dict())
+                    #     deployments = (AsyncSearch(using=self._es)
+                    #                    .index(self.deployments_index_name)
+                    #                    .filter("term", system=identifier)
+                    #                    .source(False)
+                    #                    .scan())
+                    #     async for d in deployments:
+                    #         print("deleting deployment?")
+                    #         tg.create_task(self.delete("deployment", d.meta.id, True))
+                    #
+                    #     samplingfeatures = (AsyncSearch(using=self._es)
+                    #                         .index(self.samplingfeatures_index_name)
+                    #                         .filter("term", system=identifier)
+                    #                         .source(False)
+                    #                         .scan())
+                    #     async for s in samplingfeatures:
+                    #         tg.create_task(self.delete("samplingFeature", s.meta.id, True))
+                    #
+                    # # await self._delete(self.systems_index_name, identifier)
+                    print(f"done deleting {identifier}")
+            case "deployment":
+                index_name = self.deployments_index_name
+            case "procedure":
+                index_name = self.procedures_index_name
+            case "samplingFeature":
+                index_name = self.samplingfeatures_index_name
+            case "property":
+                index_name = self.properties_index_name
+            case _:
+                raise ProviderGenericError(f"unrecognized type: {type}")
+
     async def query_collections(self, parameters: CollectionParams) -> Dict[str, Dict]:
-        query = Search(using=self._es, index=self.collections_index_name)
+        query = AsyncSearch(using=self._es, index=self.collections_index_name)
 
         query = parse_csa_params(query, parameters)
         query = parse_spatial_params(query, parameters)
 
-        found = (await self._es.search(index=self.collections_index_name,
-                                       body=query.to_dict()))["hits"]
+        found = (await self._es.search(query))["hits"]
         collections = {}
         if found["total"]["value"] > 0:
             for h in found["hits"]:
@@ -331,16 +407,16 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider):
             # TODO: maybe throw an error here?
             return [], []
 
-        query = Search(using=self._es, index=index)
+        query = AsyncSearch(using=self._es, index=index)
 
         if parameters.id:
             query = query.filter("terms", _id=parameters.id)
 
-        LOGGER.debug(json.dumps(query.to_dict(), indent=True, default=str))
-        return await search(self._es, index, query.to_dict(), parameters)
+        LOGGER.debug(json.dumps(query, indent=True, default=str))
+        return await self.search(index, query, parameters)
 
     async def query_systems(self, parameters: SystemsParams) -> CSAGetResponse:
-        query = Search(using=self._es, index=self.systems_index_name)
+        query = AsyncSearch(using=self._es, index=self.systems_index_name)
 
         query = parse_datetime_params(query, parameters)
         query = parse_csa_params(query, parameters)
@@ -363,12 +439,11 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider):
             if prop is not None:
                 query = query.filter("terms", **{key: prop})
 
-        # DEBUG only
-        LOGGER.debug(json.dumps(query.to_dict(), indent=True, default=str))
-        return await search(self._es, self.systems_index_name, query.to_dict(), parameters, ["validTime_parsed"])
+        query = query.source(excludes=["validTime_parsed"])
+        return await self.search(query, parameters)
 
     async def query_deployments(self, parameters: DeploymentsParams) -> CSAGetResponse:
-        query = Search(using=self._es, index=self.deployments_index_name)
+        query = AsyncSearch(using=self._es, index=self.deployments_index_name)
 
         query = parse_datetime_params(query, parameters)
         query = parse_csa_params(query, parameters)
@@ -377,11 +452,11 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider):
         if parameters.system is not None:
             query = query.filter("terms", system=parameters.system)
 
-        LOGGER.debug(json.dumps(query.to_dict(), indent=True, default=str))
-        return await search(self._es, self.deployments_index_name, query.to_dict(), parameters)
+        LOGGER.debug(json.dumps(query, indent=True, default=str))
+        return await self.search(query, parameters)
 
     async def query_procedures(self, parameters: ProceduresParams) -> CSAGetResponse:
-        query = Search(using=self._es, index=self.procedures_index_name)
+        query = AsyncSearch(using=self._es, index=self.procedures_index_name)
 
         query = parse_datetime_params(query, parameters)
         query = parse_csa_params(query, parameters)
@@ -390,11 +465,11 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider):
             # TODO: check if this is the correct property
             query = query.filter("terms", controlledProperty=parameters.controlledProperty)
 
-        json.dumps(query.to_dict(), indent=True, default=str)
-        return await search(self._es, self.procedures_index_name, query.to_dict(), parameters)
+        json.dumps(query, indent=True, default=str)
+        return await self.search(query, parameters)
 
     async def query_sampling_features(self, parameters: SamplingFeaturesParams) -> CSAGetResponse:
-        query = Search(using=self._es, index=self.samplingfeatures_index_name)
+        query = AsyncSearch(using=self._es, index=self.samplingfeatures_index_name)
 
         query = parse_datetime_params(query, parameters)
         query = parse_csa_params(query, parameters)
@@ -406,16 +481,16 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider):
         if parameters.system is not None:
             query = query.filter("terms", system=parameters.system)
 
-        LOGGER.debug(json.dumps(query.to_dict(), indent=True, default=str))
-        return await search(self._es, self.samplingfeatures_index_name, query.to_dict(), parameters)
+        LOGGER.debug(json.dumps(query, indent=True, default=str))
+        return await self.search(query, parameters)
 
     async def query_properties(self, parameters: CSAParams) -> CSAGetResponse:
-        query = Search(using=self._es, index=self.properties_index_name)
+        query = AsyncSearch(using=self._es, index=self.properties_index_name)
 
         query = parse_csa_params(query, parameters)
 
-        LOGGER.debug(json.dumps(query.to_dict(), indent=True, default=str))
-        return await search(self._es, self.properties_index_name, query.to_dict(), parameters)
+        LOGGER.debug(json.dumps(query, indent=True, default=str))
+        return await self.search(query, parameters)
 
     async def create(self, type: str, items: List[Dict]) -> CSACrudResponse:
         routines: List[Tuple[str, Dict]] = [None] * len(items)
@@ -426,6 +501,8 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider):
                 self._format_date_range("validTime", item)
                 index_name = self.systems_index_name
             elif type == "deployment":
+                # If System we are associated with it is local system reference it by id here.
+
                 index_name = self.deployments_index_name
             elif type == "procedure":
                 index_name = self.procedures_index_name
@@ -445,7 +522,7 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider):
 
             routines[i] = (identifier, item)
 
-        return await create_many(self._es, index_name, routines)
+        return await self.create_many(index_name, routines)
 
     def _format_date_range(self, key: str, item: Dict) -> None:
         if item.get(key):

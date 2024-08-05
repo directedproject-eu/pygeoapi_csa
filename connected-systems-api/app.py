@@ -53,9 +53,9 @@ APP.config['JSONIFY_PRETTYPRINT_REGULAR'] = CONFIG['server'].get('pretty_print',
 
 PLUGINS["provider"]["toardb"] = "provider.toardb_csa.ToarDBProvider"
 PLUGINS["provider"]["ElasticSearchConnectedSystems"] = \
-    "provider.part1.elasticsearch_csa.ConnectedSystemsESProvider"
+    "provider.part1.elasticsearch.ConnectedSystemsESProvider"
 PLUGINS["provider"]["TimescaleDBConnectedSystems"] = \
-    "provider.part2.timescaledb_csa.ConnectedSystemsTimescaleDBProvider"
+    "provider.part2.timescaledb.ConnectedSystemsTimescaleDBProvider"
 
 csapi_ = CSAPI(CONFIG, OPENAPI)
 
@@ -156,19 +156,22 @@ async def systems_path(path=None):
 
     :returns: HTTP response
     """
-    if request.method == 'GET':
-        if path is not None:
-            return await get_response(await csapi_.get_systems(request, ("id", path)))
-        else:
-            return await get_response(await csapi_.get_systems(request, None))
-    elif request.method == 'PUT':
-        return await get_response((None, HTTPStatus.NOT_IMPLEMENTED, ""))
-    else:
-        if request.content_type is not None:
-            if request.content_type == 'application/sml+json':
-                return await get_response(await csapi_.post_systems(request))
+    match request.method:
+        case "GET":
+            if path is not None:
+                return await get_response(await csapi_.get_systems(request, ("id", path)))
             else:
-                return await get_response((None, HTTPStatus.NOT_IMPLEMENTED, ""))
+                return await get_response(await csapi_.get_systems(request, None))
+        case "PUT":
+            return await get_response((None, HTTPStatus.NOT_IMPLEMENTED, ""))
+        case "POST":
+            if request.content_type is not None:
+                if request.content_type == 'application/sml+json':
+                    return await get_response(await csapi_.post_systems(request))
+                else:
+                    return await get_response((None, HTTPStatus.NOT_IMPLEMENTED, ""))
+        case "DELETE":
+            return await get_response(await csapi_.delete_systems(request, ("id", path)))
 
 
 @APP.route('/systems/<path:path>/subsystems', methods=['GET', 'POST'])
@@ -214,7 +217,11 @@ async def procedures_path(path=None):
             else:
                 return await get_response((None, HTTPStatus.NOT_IMPLEMENTED, ""))
     else:
-        return await get_response((None, HTTPStatus.NOT_IMPLEMENTED, ""))
+        if request.content_type is not None:
+            if request.content_type == 'application/sml+json':
+                return await get_response(await csapi_.put_procedures(request))
+            else:
+                return await get_response((None, HTTPStatus.NOT_IMPLEMENTED, ""))
 
 
 @APP.route('/deployments', methods=['GET', 'POST'])
@@ -233,7 +240,11 @@ async def deployments_path(path=None):
             else:
                 return await get_response((None, HTTPStatus.NOT_IMPLEMENTED, ""))
     else:
-        return await get_response((None, HTTPStatus.NOT_IMPLEMENTED, ""))
+        if request.content_type is not None:
+            if request.content_type == 'application/sml+json':
+                return await get_response(await csapi_.put_deployments(request))
+            else:
+                return await get_response((None, HTTPStatus.NOT_IMPLEMENTED, ""))
 
 
 # @APP.route('/deployments/<path:path>/systems', methods=['GET', 'POST'])
@@ -249,18 +260,24 @@ async def deployments_path(path=None):
 #                 return await get_response((None, HTTPStatus.BAD_REQUEST, ""))
 
 
-
 @APP.route('/samplingFeatures', methods=['GET'])
 @APP.route('/samplingFeatures/<path:path>', methods=['GET', 'PUT', 'DELETE'])
 async def properties_path(path=None):
     request.collection = "samplingFeatures"
-    if request.method == 'GET':
-        if path is not None:
-            return await get_response(await csapi_.get_sampling_features(request, ("id", path)))
-        else:
-            return await get_response(await csapi_.get_sampling_features(request, None))
-    else:
-        return await get_response((None, HTTPStatus.NOT_IMPLEMENTED, ""))
+    match request.method:
+        case "GET":
+            if path is not None:
+                return await get_response(await csapi_.get_sampling_features(request, ("id", path)))
+            else:
+                return await get_response(await csapi_.get_sampling_features(request))
+        case "POST":
+            if request.content_type is not None:
+                if request.content_type == 'application/sml+json':
+                    return await get_response(await csapi_.post_deployments(request))
+                else:
+                    return await get_response((None, HTTPStatus.NOT_IMPLEMENTED, ""))
+        case "PUT":
+            return await get_response((None, HTTPStatus.NOT_IMPLEMENTED, ""))
 
 
 @APP.route('/properties', methods=['GET', 'POST'])

@@ -2,12 +2,14 @@ import datetime
 import random
 import uuid
 from time import sleep
+from typing import Dict
 
 import requests
+from tqdm import tqdm
 
 last_result = 10
 
-#url_stub = "http://docker.srv.int.52north.org:5000"
+#url_stub = "http://connected-systems.docker.srv.int.52north.org"
 url_stub = "http://localhost:5000"
 
 
@@ -68,7 +70,7 @@ def gen_system():
     }
 
 
-def gen_datastream():
+def gen_datastream(system: Dict):
     return {
         "id": str(uuid.uuid4()),
         "name": "Indoor Thermometer 001 - Living Room Temperature",
@@ -81,6 +83,28 @@ def gen_datastream():
             "href": "https://data.example.org/api/samplingFeatures/4478",
             "title": "Thermometer Sampling Point"
         },
+        "system@link": {
+            "href": f"{url_stub}/systems/{system['id']}",
+            "title": system["uniqueId"]
+        },
+        "observedProperties": [{
+            "definition": "http://vocab.nerc.ac.uk/collection/P01/current/EWDAZZ01/",
+            "label": "WindDirFrom",
+            "description": "Direction relative to true north from which the wind is blowing"
+        }],
+        "phenomenonTime": [
+            "2000-08-05T12:36:56.760657+00:00",
+            "2099-08-05T12:36:56.760657+00:00"
+        ],
+        "resultTime": [
+            "2002-08-05T12:36:56.760657+00:00",
+            "2099-08-05T12:36:56.760657+00:00"
+        ],
+        "resultType": "measure",
+        "live": False,
+        "formats": [
+            "application/json"
+        ],
         "schema": {
             "obsFormat": "application/om+json",
             "resultTimeSchema": {
@@ -127,14 +151,14 @@ def run():
     system = gen_system()
     post("/systems", system, "application/sml+json")
 
-    datastream = gen_datastream()
+    datastream = gen_datastream(system)
     post(f"/systems/{system['id']}/datastreams", datastream)
 
-    for i in range(1_000_000):
+    for i in tqdm(range(1_000_000)):
         obs = []
         for i in range(20):
             obs.append(gen_observation())
-        post(f"/datastreams/{datastream['id']}/observations", obs, "application/om+json")
+        # post(f"/datastreams/{datastream['id']}/observations", obs, "application/om+json")
         # sleep(100 / 1000)
 
 

@@ -10,7 +10,7 @@ pyyaml
 filelock
 setuptools~=67.6.0
 hypercorn[uvloop]
-shapely
+shapely~=2.0.4-r0
 rtree
 tqdm
 

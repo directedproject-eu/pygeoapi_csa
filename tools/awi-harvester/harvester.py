@@ -158,7 +158,7 @@ def parse_events(item_id: str, item_name: str) -> list:
                             {
                                 "name": item_name,
                                 "system": {
-                                    "href": f"/systems{item_id}"
+                                    "href": f"/systems/{item_id}"
                                 }
                             }
                         ]

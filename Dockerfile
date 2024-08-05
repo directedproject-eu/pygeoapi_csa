@@ -1,4 +1,4 @@
-FROM python:3.11-alpine as base
+FROM python:3.12-alpine as base
 
 LABEL maintainer="Jan Speckamp <j.speckamp@52north.org>" \
       org.opencontainers.image.authors="Jan Speckamp <j.speckamp@52north.org>" \
@@ -12,12 +12,12 @@ LABEL maintainer="Jan Speckamp <j.speckamp@52north.org>" \
 
 
 # alpine is confused where to look for python libraries so we need to support it here
-ENV PYTHONPATH /usr/lib/python3.11/site-packages
+ENV PYTHONPATH /usr/lib/python3.12/site-packages
 ENV PROJ_DIR=/usr
 ENV PYTHONUNBUFFERED=1
 
 RUN apk update
-RUN apk add gcc musl-dev git proj proj-dev proj-util py3-numpy py3-shapely py3-shapely-pyc
+RUN apk add gcc musl-dev git proj proj-dev proj-util geos geos-dev py3-numpy py3-shapely py3-shapely-pyc
 
 WORKDIR /app
 

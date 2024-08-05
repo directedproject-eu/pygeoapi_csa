@@ -192,7 +192,7 @@ class ConnectedSystemsProvider:
 
         raise NotImplementedError()
 
-    async def update(self, identifier: str, items: Dict):
+    async def update(self, type: str, identifier: str, items: Dict):
         """
         Updates an existing item
 
@@ -204,7 +204,7 @@ class ConnectedSystemsProvider:
 
         raise NotImplementedError()
 
-    async def delete(self, identifier: str):
+    async def delete(self, type: str, identifier: str):
         """
         Deletes an existing item
 

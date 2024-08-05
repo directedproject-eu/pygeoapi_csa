@@ -2,9 +2,9 @@ from pygeoapi.flask_app import CONFIG, OPENAPI
 from api import *
 
 PLUGINS["provider"]["ElasticSearchConnectedSystems"] = \
-    "provider.part1.elasticsearch_csa.ConnectedSystemsESProvider"
+    "provider.part1.elasticsearch.ConnectedSystemsESProvider"
 PLUGINS["provider"]["TimescaleDBConnectedSystems"] = \
-    "provider.part2.timescaledb_csa.ConnectedSystemsTimescaleDBProvider"
+    "provider.part2.timescaledb.ConnectedSystemsTimescaleDBProvider"
 
 csapi_ = CSAPI(CONFIG, OPENAPI)
 

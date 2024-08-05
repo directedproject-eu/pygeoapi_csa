@@ -390,6 +390,22 @@ class CSAPI(API):
                                    "(controlled or controllable property).",
                     "specification": "https://opengeospatial.github.io/ogcapi-connected-systems/redoc/?url=../api"
                                      "/part1/openapi/openapi-connectedsystems-1.yaml#tag/Properties"
+                },
+                {
+                    "collection_name": "datastreams",
+                    "name": "Data Streams",
+                    "description": "Datastreams allow access to observations produced by systems, in various formats. "
+                                   "They also provide metadata describing the exact meaning of properties included in "
+                                   "the observations. API clients can act both as sender of receiver of observations.",
+                    "specification": "https://opengeospatial.github.io/ogcapi-connected-systems/redoc/?url=../api"
+                                     "/part2/openapi/openapi-connectedsystems-2.yaml"
+                },
+                {
+                    "collection_name": "observations",
+                    "name": "Observations",
+                    "description": "Access to historical and real-time observations.",
+                    "specification": "https://opengeospatial.github.io/ogcapi-connected-systems/redoc/?url=../api"
+                                     "/part2/openapi/openapi-connectedsystems-2.yaml#tag/Observations"
                 }
             ]
         }
@@ -669,6 +685,46 @@ class CSAPI(API):
             path
         )
 
+    @process
+    async def delete_systems(
+            self,
+            request: AsyncAPIRequest,
+            path: Union[Tuple[str, str], None] = None
+    ) -> Tuple[dict, int, str]:
+        return await self._delete(
+            request,
+            "system",
+            self.csa_provider_part1.delete,
+            path
+        )
+
+    async def _delete(self,
+                      request: AsyncAPIRequest,
+                      collection_name: str,
+                      fn_delete: Callable,
+                      path: Union[Tuple[str, str], None],
+                      ) -> Tuple[dict, int, str]:
+        if self.csa_provider_part1 is None:
+            # TODO: what to return here?
+            raise NotImplementedError()
+        try:
+            await fn_delete(collection_name, path[1], request.params.get("cascade", False))
+            return [], HTTPStatus.OK, ""
+        except ProviderItemNotFoundError:
+            return self.get_exception(
+                HTTPStatus.NOT_FOUND,
+                request.get_response_headers(**self.api_headers),
+                request.format,
+                'NotFound',
+                "entity not found")
+        except ProviderInvalidQueryError as err:
+            return self.get_exception(
+                HTTPStatus.BAD_REQUEST,
+                request.format,
+                request.get_response_headers(**self.api_headers),
+                'BadRequest',
+                "bad request: " + err.message)
+
     async def _get(self,
                    request: AsyncAPIRequest,
                    path: Union[Tuple[str, str], None],
@@ -818,21 +874,30 @@ class CSAPI(API):
             collection = request.collection
             data = {
                 "config": {
-                    "collection": f"{request.collection}",
+                    "collection": collection,
                     "backend-url": self.base_url + "/",
                 },
                 "breadcrumbs": [
-                    (request.collection, "/")
+                    (collection, "/")
                 ]
             }
             if collection == "subsystems":
                 parent_id = request.params["parent"]
-                data["parent"] = parent_id
+                data["config"]["parent"] = parent_id
                 data["breadcrumbs"] = [
                     ("systems", "../"),
                     (parent_id, f"../{parent_id}"),
-                    (request.collection, "subsystems")
+                    (collection, "subsystems")
                 ]
+            if collection == "datastreams" or collection == "deployments":
+                system_id = request.params["system"]
+                if system_id:
+                    data["config"]["system"] = system_id
+                    data["breadcrumbs"] = [
+                        ("systems", "../"),
+                        (system_id, f"../{system_id}"),
+                        (collection, collection)
+                    ]
         else:
             collection, id = request.path_info.split("/")
             data = {

@@ -6,22 +6,21 @@ from typing import List, Dict, Tuple
 import asyncpg
 from asyncpg import Connection
 from elasticsearch import AsyncElasticsearch
-from elasticsearch_dsl import Search
+from elasticsearch_dsl import Search, AsyncSearch
 from pygeoapi.provider.base import ProviderGenericError, ProviderItemNotFoundError
 
 from .formats.om_json_scalar import OMJsonSchemaParser
 from .util import TimescaleDbConfig, ObservationQuery, Observation
-from ..connector_elastic import create_many, connect_elasticsearch, ElasticSearchConfig, search, parse_csa_params, \
-    parse_temporal_filters, setup_elasticsearch
+from ..connector_elastic import ElasticsearchConnector, ElasticSearchConfig, parse_csa_params, \
+    parse_temporal_filters
 from ..definitions import ConnectedSystemsPart2Provider, CSAGetResponse, DatastreamsParams, ObservationsParams, \
     CSACrudResponse
 
 LOGGER = logging.getLogger(__name__)
 
 
-class ConnectedSystemsTimescaleDBProvider(ConnectedSystemsPart2Provider):
+class ConnectedSystemsTimescaleDBProvider(ConnectedSystemsPart2Provider, ElasticsearchConnector):
     _pool: asyncpg.connection = None
-    _es: AsyncElasticsearch = None
     datastreams_index_name = "datastreams"
 
     # TODO: check if there are further problematic fields
@@ -61,7 +60,7 @@ class ConnectedSystemsTimescaleDBProvider(ConnectedSystemsPart2Provider):
                                                min_size=self._ts_config.pool_min_size,
                                                max_size=self._ts_config.pool_max_size)
 
-        self._es: AsyncElasticsearch = await connect_elasticsearch(self._es_config)
+        await self.connect_elasticsearch(self._es_config)
 
     async def setup(self):
         ## Setup TimescaleDB
@@ -97,8 +96,7 @@ class ConnectedSystemsTimescaleDBProvider(ConnectedSystemsPart2Provider):
                     await connection.execute(stmnt)
 
         ## Setup ElasticSearch
-        await setup_elasticsearch(
-            self._es,
+        await self.setup_elasticsearch(
             [
                 (self.datastreams_index_name, self.datastream_mappings),
             ])
@@ -137,7 +135,7 @@ class ConnectedSystemsTimescaleDBProvider(ConnectedSystemsPart2Provider):
                     identifier = item["id"]
 
                 routines[i] = (identifier, item)
-                return await create_many(self._es, self.datastreams_index_name, routines)
+                return await self.create_many(self.datastreams_index_name, routines)
         elif type == "observation":
             # check if linked datastream exists
             datastream_id = items[0]['datastream']
@@ -201,16 +199,19 @@ class ConnectedSystemsTimescaleDBProvider(ConnectedSystemsPart2Provider):
         :returns: dict of formatted properties
         """
 
-        query = Search(using=self._es, index=self.datastreams_index_name)
+        query = AsyncSearch(using=self._es, index=self.datastreams_index_name)
         query = parse_csa_params(query, parameters)
         query = parse_temporal_filters(query, parameters)
 
+        if parameters.system is not None:
+            query = query.filter("terms", system=parameters.system)
+
         LOGGER.debug(json.dumps(query.to_dict(), indent=True, default=str))
         if parameters.schema:
-            response = await search(self._es, self.datastreams_index_name, query.to_dict(), parameters)
+            response = await self.search(query, parameters)
             return list(map(lambda x: x["schema"], response[0])), []
         else:
-            return await search(self._es, self.datastreams_index_name, query.to_dict(), parameters)
+            return await self.search(query, parameters)
 
     async def query_observations(self, parameters: ObservationsParams) -> CSAGetResponse:
         """
