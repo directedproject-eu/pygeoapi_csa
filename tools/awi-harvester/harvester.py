@@ -32,8 +32,7 @@ def post(path: str, payload: dict, content_type: str = "application/json"):
     url = "http://localhost:5000/" + path
     headers = {"Content-Type": content_type}
     response = requests.request("POST", url, json=payload, headers=headers)
-    if response.status_code != 200:
-        print(response.text)
+    if response.status_code != 204:
 
 
 def get_item(id: str) -> dict:

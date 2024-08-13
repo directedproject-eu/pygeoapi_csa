@@ -4,14 +4,16 @@ import logging
 from typing import Coroutine, Any, Union
 
 from elasticsearch import AsyncElasticsearch
-from elasticsearch_dsl import AsyncSearch
+from elasticsearch_dsl import AsyncSearch, Document
 from elastic_transport import NodeConfig
+from elasticsearch_dsl.async_connections import connections
 
 from .definitions import *
 from pygeoapi.provider.base import ProviderConnectionError, ProviderInvalidDataError, ProviderQueryError, \
     ProviderItemNotFoundError
 
 LOGGER = logging.getLogger(__name__)
+# LOGGER.setLevel('DEBUG')
 
 
 def parse_datetime_params(query: AsyncSearch, parameters: DatetimeParam) -> AsyncSearch:
@@ -79,67 +81,31 @@ class ElasticSearchConfig:
     dbname: str
 
 
-async def _delete_cascade(query: AsyncSearch) -> any:
-    # DEBUG only
-    # print(json.dumps(query.to_dict(), indent=True, default=str))
-    return await query.delete()
-
-
 class ElasticsearchConnector:
-    _es: AsyncElasticsearch
 
     async def connect_elasticsearch(self, config: ElasticSearchConfig) -> None:
         LOGGER.debug(f'Connecting to Elasticsearch at: https://{config.hostname}:{config.port}/{config.dbname}')
-        self._es = AsyncElasticsearch(
-            [
-                NodeConfig(
+        try:
+            connections.create_connection(
+                hosts=[NodeConfig(
                     scheme="https",
                     host=config.hostname,
                     port=config.port,
                     verify_certs=False,
                     ca_certs=None,
                     ssl_show_warn=False,
-                )
-            ],
-            http_auth=(config.user, config.password),
-            verify_certs=False)
-        if not await self._es.ping():
-            msg = f'Cannot connect to Elasticsearch'
-            LOGGER.critical(msg)
-            raise ProviderConnectionError(msg)
-
-        LOGGER.debug('Determining ES version')
-        v = await(self._es.info())
-        v = v['version']['number'][:3]
-        if float(v) < 8:
-            msg = 'only ES 8+ supported'
-            LOGGER.critical(msg)
-            raise ProviderConnectionError(msg)
-
-    async def setup_elasticsearch(self, mappings: List[Tuple[str, Dict]]) -> None:
-        try:
-            for index in mappings:
-                index_name, index_mapping = index
-
-                if not await (self._es.indices.exists(index=index_name)):
-                    await self._es.indices.create(
-                        index=index_name,
-                        mappings=index_mapping
-                    )
+                )],
+                timeout=20,
+                http_auth=(config.user, config.password),
+                verify_certs=False)
         except Exception as e:
-            LOGGER.exception(e)
-
-        LOGGER.debug("finished initializing AsyncElasticsearch")
+            msg = f'Cannot connect to Elasticsearch: {e}'
+            LOGGER.critical(msg)
+            raise ProviderConnectionError(msg)
 
     async def _exists(self, query: AsyncSearch) -> bool:
-        # DEBUG only
-        # print(json.dumps(query.to_dict(), indent=True, default=str))
-        return await query.count() > 0
-
-    async def _delete(self, index: str, identifier: str) -> any:
-        # DEBUG only
-        # print(json.dumps(query.to_dict(), indent=True, default=str))
-        return await self._es.delete(index=index, id=identifier)
+        LOGGER.debug(json.dumps(query.to_dict(), indent=True, default=str))
+        return (await query.count()) > 0
 
     async def search(self,
                      query: AsyncSearch,
@@ -148,10 +114,11 @@ class ElasticsearchConnector:
         # Select appropriate strategy here: For collections >10k elements search_after must be used
         if excludes is None:
             excludes = []
-        # DEBUG only
-        print(json.dumps(query.to_dict(), indent=True, default=str))
+        LOGGER.debug(json.dumps(query.to_dict(), indent=True, default=str))
 
-        found = (await query.source(excludes=excludes)[parameters.offset:parameters.limit].execute()).hits
+        found = (await query.source(excludes=excludes)[parameters.offset:parameters.offset+parameters.limit].execute(
+
+        )).hits
 
         count = found.total.value
         if count > 0:
@@ -173,20 +140,21 @@ class ElasticsearchConnector:
             else:
                 return [], []
 
-    async def create_many(self, index: str, items: List[Tuple[str, Dict]]) -> CSACrudResponse:
-        routines = [None] * len(items)
-
-        for i, elem in enumerate(items):
-            identifier, item = elem
-            # add to ES if not already present
-            exists = await self._es.exists(index=index, id=identifier)
-            if exists.body:
-                raise ProviderInvalidDataError(user_msg='record already exists')
-            else:
-                routines[i] = self._es.index(index=index, id=identifier, document=item)
-
-        # wait for completion
-        await asyncio.gather(*routines)
-
-        # TODO: check if we need to validate something here
-        return [item[0] for item in items]
+    # Creating multiple entities with one request is apparently not part of the spec anymore
+    # async def create_many(self, index: str, items: List[Tuple[str, Dict]]) -> CSACrudResponse:
+    #     routines = [None] * len(items)
+    #
+    #     for i, elem in enumerate(items):
+    #         identifier, item = elem
+    #         # add to ES if not already present
+    #         exists = await self._es.exists(index=index, id=identifier)
+    #         if exists.body:
+    #             raise ProviderInvalidDataError(user_msg='record already exists')
+    #         else:
+    #             routines[i] = self._es.index(index=index, id=identifier, document=item)
+    #
+    #     # wait for completion
+    #     await asyncio.gather(*routines)
+    #
+    #     # TODO: check if we need to validate something here
+    #     return [item[0] for item in items]

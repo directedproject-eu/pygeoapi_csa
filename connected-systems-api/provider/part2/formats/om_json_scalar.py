@@ -1,4 +1,5 @@
 import json
+import struct
 import uuid
 from datetime import datetime
 
@@ -55,21 +56,19 @@ class OMJsonSchemaParser(SchemaParser):
 
     # Example:
 
-    def decode(self, datastream: str, data: any) -> Observation:
+    def decode(self, data: any) -> Observation:
         return Observation(
-            id=str(uuid.uuid4()),
-            datastream=datastream,
-            result=json.dumps(data["result"]),
+            datastream_id=data["datastream"],
             resultTime=datetime.fromisoformat(data["resultTime"]),
-            phenomenonTime=datetime.fromisoformat(data["resultTime"]),
+            result=struct.pack("!f", data["result"]),
         )
 
     def encode(self, obs: asyncpg.Record) -> any:
-        #TODO(specki): Check what is officially required here, e.g. are datastream@link or foi@link necessary?
+        # TODO(specki): Check what is officially required here, e.g. are datastream@link or foi@link necessary?
+        print("adsf")
         return {
             "id": str(obs["uuid"]),
-            "datastream@id": str(obs["datastream"]),
+            "datastream@id": str(obs["datastream_id"]),
             "resultTime": obs["resulttime"],
-            "phenomenonTime": obs["phenomenontime"],
-            "result": json.loads(obs["result"])
+            "result": struct.unpack("!f", obs["result"])
         }

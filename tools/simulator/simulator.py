@@ -6,6 +6,7 @@ from typing import Dict
 
 import requests
 from tqdm import tqdm
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 last_result = 10
 
@@ -13,11 +14,22 @@ last_result = 10
 url_stub = "http://localhost:5000"
 
 
+THREAD_POOL = 16
+
+# This is how to create a reusable connection pool with python requests.
+session = requests.Session()
+session.mount(
+    'https://',
+    requests.adapters.HTTPAdapter(pool_maxsize=THREAD_POOL,
+                                  max_retries=3,
+                                  pool_block=True)
+)
+
 def post(path: str, payload: dict, content_type: str = "application/json"):
     url = url_stub + path
     headers = {"Content-Type": content_type}
     response = requests.request("POST", url, json=payload, headers=headers)
-    print(response.text)
+    # print(response.text)
 
 
 def gen_observation() -> dict:
@@ -147,20 +159,18 @@ def gen_datastream(system: Dict):
 
 def run():
     # get datastream id
-
     system = gen_system()
     post("/systems", system, "application/sml+json")
 
     datastream = gen_datastream(system)
     post(f"/systems/{system['id']}/datastreams", datastream)
 
-    for i in tqdm(range(1_000_000)):
-        obs = []
-        for i in range(20):
-            obs.append(gen_observation())
-        # post(f"/datastreams/{datastream['id']}/observations", obs, "application/om+json")
+    for _ in tqdm(range(1_000)):
+        post(f"/datastreams/{datastream['id']}/observations", gen_observation(), "application/om+json")
         # sleep(100 / 1000)
 
 
 if __name__ == "__main__":
+    #import cProfile
+    #cProfile.run('run()')
     run()

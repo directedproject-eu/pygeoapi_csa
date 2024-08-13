@@ -6,34 +6,28 @@ from typing import List, Dict, Tuple
 import asyncpg
 from asyncpg import Connection
 from elasticsearch import AsyncElasticsearch
-from elasticsearch_dsl import Search, AsyncSearch
+from elasticsearch_dsl import Search, AsyncSearch, async_connections, AsyncDocument, Keyword
 from pygeoapi.provider.base import ProviderGenericError, ProviderItemNotFoundError
 
 from .formats.om_json_scalar import OMJsonSchemaParser
 from .util import TimescaleDbConfig, ObservationQuery, Observation
 from ..connector_elastic import ElasticsearchConnector, ElasticSearchConfig, parse_csa_params, \
     parse_temporal_filters
-from ..definitions import ConnectedSystemsPart2Provider, CSAGetResponse, DatastreamsParams, ObservationsParams, \
-    CSACrudResponse
+from ..definitions import *
 
 LOGGER = logging.getLogger(__name__)
 
 
+class Datastream(AsyncDocument):
+    id = Keyword()
+    system = Keyword()
+
+    class Index:
+        name = "datastreams"
+
+
 class ConnectedSystemsTimescaleDBProvider(ConnectedSystemsPart2Provider, ElasticsearchConnector):
     _pool: asyncpg.connection = None
-    datastreams_index_name = "datastreams"
-
-    # TODO: check if there are further problematic fields
-    datastream_mappings = {
-        "properties": {
-            "system": {
-                "type": "keyword"
-            },
-            "id": {
-                "type": "keyword"
-            }
-        }
-    }
 
     def __init__(self, provider_def):
         super().__init__(provider_def)
@@ -61,24 +55,29 @@ class ConnectedSystemsTimescaleDBProvider(ConnectedSystemsPart2Provider, Elastic
                                                max_size=self._ts_config.pool_max_size)
 
         await self.connect_elasticsearch(self._es_config)
+        await self.setup()
+
+    async def close(self):
+        await self._pool.close()
+        es = async_connections.get_connection()
+        await es.close()
 
     async def setup(self):
         ## Setup TimescaleDB
-        statements = []
-        statements.append("""CREATE EXTENSION IF NOT EXISTS POSTGIS;""")
+        statements = ["""CREATE EXTENSION IF NOT EXISTS POSTGIS;"""]
 
         if self._ts_config.drop_tables:
             statements.append("""DROP TABLE IF EXISTS observations;""")
 
         statements.append("""CREATE TABLE IF NOT EXISTS observations (
                                                                 uuid UUID DEFAULT gen_random_uuid(),
-                                                                phenomenontime TIMESTAMPTZ ,
                                                                 resulttime TIMESTAMPTZ NOT NULL,
-                                                                result JSONB,
-                                                                geom GEOMETRY,
-                                                                foi text,
-                                                                datastream text,
-                                                                observedproperty text
+                                                                phenomenontime TIMESTAMPTZ,
+                                                                datastream_id TEXT NOT NULL,
+                                                                result BYTEA NOT NULL,
+                                                                sampling_feature_id text,
+                                                                procedure_link text,
+                                                                parameters text
                                                             );
                                                             """)
 
@@ -95,21 +94,12 @@ class ConnectedSystemsTimescaleDBProvider(ConnectedSystemsPart2Provider, Elastic
                 for stmnt in statements:
                     await connection.execute(stmnt)
 
-        ## Setup ElasticSearch
-        await self.setup_elasticsearch(
-            [
-                (self.datastreams_index_name, self.datastream_mappings),
-            ])
-
-    async def close(self):
-        await self._pool.close()
-        await self._es.close()
-
     def get_conformance(self) -> List[str]:
         """Returns the list of conformance classes that are implemented by this provider"""
+        LOGGER.error("TODO: define conformance classes")
         return []
 
-    async def create(self, type: str, items: List[Dict]) -> CSACrudResponse:
+    async def create(self, type: EntityType, item: Dict) -> CSACrudResponse:
         """
         Create a new item
 
@@ -117,35 +107,35 @@ class ConnectedSystemsTimescaleDBProvider(ConnectedSystemsPart2Provider, Elastic
 
         :returns: identifier of created item
         """
-
-        routines: List[Tuple[str, Dict]] = [None] * len(items)
-        if type == "datastream":
+        if type == EntityType.DATASTREAMS:
             # check if linked system exists
-            system_exists = await self._es.exists(index="systems", id=items[0]["system"])
-            if not system_exists:
-                raise ProviderItemNotFoundError(f"no system with id {items[0]['system']} found!")
+            if not self._exists(System.search().filter("term", id=item["system"])):
+                raise ProviderItemNotFoundError(f"no system with id {item['system']} found!")
 
             # create in elasticsearch
-            for i, item in enumerate(items):
-                if "id" not in item:
-                    # We may have to generate id as it is not always required
-                    identifier = str(uuid.uuid4())
-                    item["id"] = identifier
-                else:
-                    identifier = item["id"]
+            if "id" not in item:
+                # We may have to generate id as it is not always required
+                identifier = str(uuid.uuid4())
+                item["id"] = identifier
+            else:
+                identifier = item["id"]
 
-                routines[i] = (identifier, item)
-                return await self.create_many(self.datastreams_index_name, routines)
-        elif type == "observation":
+            try:
+                ds = Datastream(**item)
+                await ds.save(refresh=True)
+                return identifier
+            except Exception as e:
+                raise ProviderGenericError(f"error saving datastream {e}")
+
+        elif type == EntityType.OBSERVATIONS:
             # check if linked datastream exists
-            datastream_id = items[0]['datastream']
-            datastream_exists = await self._es.exists(index=self.datastreams_index_name, id=datastream_id)
-            if not datastream_exists:
+            datastream_id = item['datastream']
+            if not await self._exists(Datastream.search().filter("term", id=item["datastream"])):
                 raise ProviderItemNotFoundError(f"no datastream with id {datastream_id} found!")
 
             # create in timescaledb
             # TODO: resolve to different parsers based on something?
-            return await self.put_observations([self.parser.decode(datastream_id, elem) for elem in items])
+            return await self.put_observations([self.parser.decode(item)])
         else:
             raise ProviderGenericError(f"unrecognized type: {type}")
 
@@ -158,18 +148,18 @@ class ConnectedSystemsTimescaleDBProvider(ConnectedSystemsPart2Provider, Elastic
                 for idx, obs in enumerate(observations):
                     # TODO: use prepared statement
                     res[idx] = str(await connection.fetchval(
-                        "INSERT INTO observations (phenomenontime, resulttime, result, geom, foi, datastream, observedproperty) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING uuid;",
-                        obs.phenomenonTime,
+                        "INSERT INTO observations (resulttime, phenomenontime, datastream_id, result, sampling_feature_id, procedure_link, parameters) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING uuid;",
                         obs.resultTime,
+                        obs.phenomenonTime,
+                        obs.datastream_id,
                         obs.result,
-                        obs.geom,
-                        obs.foi,
-                        obs.datastream,
-                        obs.observedProperty
+                        obs.sampling_feature_id,
+                        obs.procedure_link,
+                        obs.parameters
                     ))
         return res
 
-    async def update(self, identifier, item):
+    async def update(self, type: EntityType, identifier: str, item: Dict):
         """
         Updates an existing item
 
@@ -181,7 +171,7 @@ class ConnectedSystemsTimescaleDBProvider(ConnectedSystemsPart2Provider, Elastic
 
         raise NotImplementedError()
 
-    async def delete(self, identifier):
+    async def delete(self, type: EntityType, identifier: str, cascade: bool = False):
         """
         Deletes an existing item
 
@@ -236,9 +226,6 @@ class ConnectedSystemsTimescaleDBProvider(ConnectedSystemsPart2Provider, Elastic
             q.with_observedproperty(parameters.observedProperty)
         if parameters.datastream:
             q.with_datastream(parameters.datastream)
-
-        #if parameters.system:
-        #    q.with_system(parameters.system)
 
         connection: Connection
         async with self._pool.acquire() as connection:

@@ -70,6 +70,7 @@ dynamic-resources:
     type: connected-systems
     title: "elasticsearch-csa-adapter"
     description: "Adapter to Elasticsearch CSA-Part1 Backend"
+    strict_validation: False
     keywords: [ ]
     provider:
       type: elastic-csa-adapter
@@ -79,6 +80,7 @@ dynamic-resources:
       dbname: csa
       user: elastic
       password: password
+
   connected-systems-api-part2:
     type: connected-systems
     title: "timescale-csa-adapter"

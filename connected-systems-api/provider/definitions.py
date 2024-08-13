@@ -16,32 +16,34 @@
 import dataclasses
 import urllib.parse
 from dataclasses import dataclass
-from enum import Enum
+from enum import Enum, auto
 from typing import List, Optional, Dict, Tuple, TypeAlias
 from datetime import datetime
-from collections import OrderedDict
 
-from pygeoapi.api import F_JSONLD, F_JSON
+from elasticsearch_dsl import AsyncDocument, Keyword, GeoShape, DateRange, InnerDoc
 from pygeoapi.provider.base import ProviderInvalidQueryError
 
 TimeInterval: TypeAlias = Tuple[Optional[datetime], Optional[datetime]]
 CSAGetResponse: TypeAlias = Tuple[List[Dict], List[Dict]] | None
-CSACrudResponse: TypeAlias = List[str]
+CSACrudResponse: TypeAlias = str | List[str]
 
 
-class ALLOWED_MIMES(Enum):
-    F_HTML = "html"
-    F_GEOJSON = "application/geo+json"
-    F_SMLJSON = "application/sml+json"
-    F_OMJSON = "application/om+json"
-    F_SWEJSON = "application/swe+json"
+class EntityType(Enum):
+    SYSTEMS = auto()
+    DEPLOYMENTS = auto()
+    PROCEDURES = auto()
+    SAMPLING_FEATURES = auto()
+    PROPERTIES = auto()
+    DATASTREAMS = auto()
+    DATASTREAMS_SCHEMA = auto()
+    OBSERVATIONS = auto()
 
 
 @dataclass
 class CSAParams:
     _parameters = ["f", "id", "q", "limit", "offset"]
     _url: str = None
-    f: ALLOWED_MIMES = ALLOWED_MIMES.F_HTML  # format
+    f: str = "html"  # format
     id: List[str] = None
     q: Optional[List[str]] = None
     limit: int = 10
@@ -162,6 +164,58 @@ class ObservationsParams(FoiObservedpropertyParam, ResulttimePhenomenontimeParam
     datastream: Optional[str] = None
 
 
+class CharacteristicsProp(InnerDoc):
+    value = Keyword()
+
+
+class Characteristics(InnerDoc):
+    characteristics = CharacteristicsProp()
+
+
+class System(AsyncDocument):
+    id: str = Keyword()
+    position = GeoShape()
+    validTime_parsed = DateRange()
+    parent = Keyword()
+    procedure = Keyword()
+    poi = Keyword()
+    observedProperty = Keyword()
+    controlledProperty = Keyword()
+    uniqueId = Keyword()
+    characteristics = Characteristics()
+
+    class Index:
+        name = "systems"
+
+
+class Deployment(AsyncDocument):
+    id: str = Keyword()
+
+    class Index:
+        name = "deployments"
+
+
+class Procedure(AsyncDocument):
+    id: str = Keyword()
+
+    class Index:
+        name = "procedures"
+
+
+class SamplingFeature(AsyncDocument):
+    id: str = Keyword()
+
+    class Index:
+        name = "sampling_features"
+
+
+class Property(AsyncDocument):
+    id: str = Keyword()
+
+    class Index:
+        name = "properties"
+
+
 class ConnectedSystemsProvider:
     """Base provider for Providers implementing Parts of Connected Systems API"""
 
@@ -181,7 +235,7 @@ class ConnectedSystemsProvider:
         """Returns the list of conformance classes that are implemented by this provider"""
         return []
 
-    async def create(self, type: str, items: List[Dict]) -> CSACrudResponse:
+    async def create(self, type: EntityType, item: Dict) -> CSACrudResponse:
         """
         Create a new item
 
@@ -192,9 +246,22 @@ class ConnectedSystemsProvider:
 
         raise NotImplementedError()
 
-    async def update(self, type: str, identifier: str, items: Dict):
+    async def update(self, type: EntityType, identifier: str, item: Dict):
         """
         Updates an existing item
+
+        :param type: type of collection
+        :param identifier: feature id
+        :param item: `dict` of partial item
+
+        :returns: `bool` of update result
+        """
+
+        raise NotImplementedError()
+
+    async def replace(self, type: EntityType, identifier: str, item: Dict):
+        """
+        Replaces an existing item
 
         :param identifier: feature id
         :param item: `dict` of partial or full item
@@ -204,7 +271,7 @@ class ConnectedSystemsProvider:
 
         raise NotImplementedError()
 
-    async def delete(self, type: str, identifier: str):
+    async def delete(self, type: EntityType, identifier: str, cascade: bool = False):
         """
         Deletes an existing item
 

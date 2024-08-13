@@ -8,16 +8,16 @@ LOGGER = logging.getLogger(__name__)
 
 @dataclass(slots=True)
 class Observation:
-    id: str  # unique identifier
-    datastream: str  # id of the associated datastream
-    result: str  # raw result data
+    datastream_id: str  # id of the associated datastream
+    resultTime: datetime
+    result: bytes  # raw result data
 
-    phenomenonTime: datetime | None
-    resultTime: datetime | None
+    id: Optional[str] = None  # unique identifier
+    sampling_feature_id: Optional[str] = None
+    procedure_link: Optional[str] = None
+    phenomenonTime: Optional[datetime] = None
+    parameters: Optional[str] = None
 
-    geom: str | None = None  # geometry
-    foi: str | None = None  # feature of interest
-    observedProperty: str | None = None  # observedProperty
 
 
 @dataclass(frozen=True)
@@ -31,7 +31,7 @@ class TimescaleDbConfig:
     pool_min_size: int = 10
     pool_max_size: int = 10
 
-    drop_tables: bool = False  # True if existing tables should be dropped
+    drop_tables: bool = True  # True if existing tables should be dropped
 
     def connection_string(self) -> str:
         return f"postgres://{self.user}:{self.password}@{self.hostname}:{self.port}/{self.dbname}"
@@ -67,19 +67,10 @@ class ObservationQuery:
     def with_id(self, ids: List[str]) -> Self:
         return self._in("uuid", ids)
 
-    def with_system(self, ids: List[str]) -> Self:
-        return self._in("system", ids)
-
-    def with_foi(self, ids: List[str]) -> Self:
-        return self._in("foi", ids)
-
     def with_datastream(self, id: str) -> Self:
         self.clauses.append(f"datastream=${len(self.clauses) + 1}")
         self.parameters.append(id)
         return self
-
-    def with_observedproperty(self, ids: List[str]) -> Self:
-        return self._in("observedproperty", ids)
 
     def with_limit(self, limit: int) -> Self:
         if limit < 10_000:

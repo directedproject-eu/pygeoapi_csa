@@ -11,20 +11,20 @@ csapi_ = CSAPI(CONFIG, OPENAPI)
 
 async def setup_db():
     """ Initialize peristent database/provider connections """
-    if csapi_.csa_provider_part1:
-        await csapi_.csa_provider_part1.open()
-        await csapi_.csa_provider_part1.setup()
-    if csapi_.csa_provider_part2:
-        await csapi_.csa_provider_part2.open()
-        await csapi_.csa_provider_part2.setup()
+    if csapi_.provider_part1:
+        await csapi_.provider_part1.open()
+        await csapi_.provider_part1.setup()
+    if csapi_.provider_part2:
+        await csapi_.provider_part2.open()
+        await csapi_.provider_part2.setup()
 
 
 async def close_db():
     """ Clean exit database/provider connections """
-    if csapi_.csa_provider_part1:
-        await csapi_.csa_provider_part1.close()
-    if csapi_.csa_provider_part2:
-        await csapi_.csa_provider_part2.close()
+    if csapi_.provider_part1:
+        await csapi_.provider_part1.close()
+    if csapi_.provider_part2:
+        await csapi_.provider_part2.close()
 
 
 async def main():
