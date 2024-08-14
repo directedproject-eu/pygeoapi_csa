@@ -16,18 +16,18 @@
 import datetime
 import logging
 import uuid
-from typing import Dict, List
 
 import elasticsearch
-from elasticsearch_dsl import AsyncSearch, AsyncDocument, Keyword, GeoShape, DateRange, InnerDoc, \
-    async_connections
-from pygeoapi.provider.base import ProviderGenericError, ProviderInvalidQueryError, ProviderNotFoundError
+from elasticsearch_dsl import AsyncSearch, async_connections
+from pygeoapi.provider.base import ProviderGenericError, ProviderItemNotFoundError
 
 from ..connector_elastic import ElasticsearchConnector, ElasticSearchConfig, parse_csa_params, parse_spatial_params, \
     parse_datetime_params
 from ..definitions import *
 
 LOGGER = logging.getLogger(__name__)
+
+
 # LOGGER.setLevel(level='DEBUG')
 
 
@@ -331,7 +331,7 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchCon
                 # parse date_range fields to es-compatible format
                 self._format_date_range("validTime", item)
                 parent_id = item.get("parent", None)
-                if parent_id and not self._exists(System.search().filter("term", id=parent_id)):
+                if parent_id and not await System().exists(id=parent_id):
                     # check that parent exists,
                     raise ProviderInvalidQueryError(user_msg=f"cannot find parent system with id: {parent_id}")
                 entity = System(**item)
@@ -352,9 +352,14 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchCon
             entity.id = identifier
         else:
             identifier = item["id"]
+            entity.id = identifier
 
         try:
+            entity.meta.id = identifier
+            print(entity.meta.id)
             if await entity.save():
+
+                test = await System.get(id=identifier)
                 return identifier
             else:
                 raise Exception("cannot save identifier!")
@@ -448,7 +453,7 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchCon
                     raise ProviderInvalidQueryError(user_msg=f"unrecognized type {type}")
             return await entity.delete()
         except elasticsearch.NotFoundError as e:
-            raise ProviderNotFoundError(user_msg=f"cannot find {type} with id: {identifier}! {e}")
+            raise ProviderItemNotFoundError(user_msg=f"cannot find {type} with id: {identifier}! {e}")
         except Exception as e:
             raise ProviderGenericError(user_msg=f"error while deleting: {e}")
 
@@ -469,7 +474,7 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchCon
                     raise ProviderInvalidQueryError(user_msg=f"unrecognized type {type}")
             return await entity
         except Exception as e:
-            raise ProviderNotFoundError(user_msg=f"cannot find {type} with id: {identifier}! {e}")
+            raise ProviderItemNotFoundError(user_msg=f"cannot find {type} with id: {identifier}! {e}")
 
     def _format_date_range(self, key: str, item: Dict) -> None:
         if item.get(key):

@@ -116,9 +116,8 @@ class ElasticsearchConnector:
             excludes = []
         LOGGER.debug(json.dumps(query.to_dict(), indent=True, default=str))
 
-        found = (await query.source(excludes=excludes)[parameters.offset:parameters.offset+parameters.limit].execute(
-
-        )).hits
+        found = (await query.source(excludes=excludes)[parameters.offset:parameters.offset+parameters.limit]
+                 .execute()).hits
 
         count = found.total.value
         if count > 0:

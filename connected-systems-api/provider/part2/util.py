@@ -31,7 +31,7 @@ class TimescaleDbConfig:
     pool_min_size: int = 10
     pool_max_size: int = 10
 
-    drop_tables: bool = True  # True if existing tables should be dropped
+    drop_tables: bool = False  # True if existing tables should be dropped
 
     def connection_string(self) -> str:
         return f"postgres://{self.user}:{self.password}@{self.hostname}:{self.port}/{self.dbname}"
@@ -68,12 +68,12 @@ class ObservationQuery:
         return self._in("uuid", ids)
 
     def with_datastream(self, id: str) -> Self:
-        self.clauses.append(f"datastream=${len(self.clauses) + 1}")
+        self.clauses.append(f"datastream_id=${len(self.clauses) + 1}")
         self.parameters.append(id)
         return self
 
     def with_limit(self, limit: int) -> Self:
-        if limit < 10_000:
+        if limit < 100_000:
             self.limit = limit
         return self
 
@@ -99,7 +99,7 @@ class ObservationQuery:
             self.parameters.append(time[1])
         return self
 
-    def to_sql(self) -> str:
+    def to_sql(self, with_paging: bool = True) -> str:
         stub = ""
         # omit statement if none set
         if len(self.clauses) > 0:
@@ -107,9 +107,10 @@ class ObservationQuery:
             stub = "WHERE "
             stub += " AND ".join(self.clauses)
 
-        stub += f" LIMIT {self.limit}"
-        if self.offset > 0:
-            stub += f" OFFSET {self.offset}"
+        if with_paging:
+            stub += f" LIMIT {self.limit}"
+            if self.offset > 0:
+                stub += f" OFFSET {self.offset}"
 
         LOGGER.debug(f"querying with filter: {stub}")
         return stub

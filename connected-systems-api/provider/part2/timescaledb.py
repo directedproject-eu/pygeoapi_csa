@@ -1,12 +1,15 @@
+import functools
 import json
 import logging
 import uuid
+from http import HTTPStatus
 from typing import List, Dict, Tuple
 
 import asyncpg
+import elasticsearch
 from asyncpg import Connection
 from elasticsearch import AsyncElasticsearch
-from elasticsearch_dsl import Search, AsyncSearch, async_connections, AsyncDocument, Keyword
+from elasticsearch_dsl import Search, AsyncSearch, async_connections, AsyncDocument, Keyword, AttrDict, Object
 from pygeoapi.provider.base import ProviderGenericError, ProviderItemNotFoundError
 
 from .formats.om_json_scalar import OMJsonSchemaParser
@@ -16,18 +19,51 @@ from ..connector_elastic import ElasticsearchConnector, ElasticSearchConfig, par
 from ..definitions import *
 
 LOGGER = logging.getLogger(__name__)
+LOGGER.setLevel('DEBUG')
+
+
+class Schema(InnerDoc):
+    obsFormat: str
 
 
 class Datastream(AsyncDocument):
     id = Keyword()
     system = Keyword()
+    schema = Schema()
 
     class Index:
         name = "datastreams"
 
 
+class Cache:
+    """
+    Small cache using circular buffer used for caching whether datastreams exist.
+    """
+    __cache = [None] * 128
+    __pointer: int = 0
+
+    async def exists(self, identifier: str) -> bool:
+        if identifier in self.__cache:
+            # Identifier is in cache
+            return True
+        elif await (Datastream.search().filter("term", id=identifier).count()) > 0:
+            # Request and update cache if matching
+            self.__cache[self.__pointer] = identifier
+            self.__pointer = (self.__pointer + 1) % 128
+            return True
+        else:
+            return False
+
+    def remove(self, identifier: str):
+        """removes element with given identifier from the list. Does not change the pointer"""
+        for elem in self.__cache:
+            if elem == identifier:
+                del elem
+
+
 class ConnectedSystemsTimescaleDBProvider(ConnectedSystemsPart2Provider, ElasticsearchConnector):
     _pool: asyncpg.connection = None
+    _cache: Cache = Cache()
 
     def __init__(self, provider_def):
         super().__init__(provider_def)
@@ -109,7 +145,7 @@ class ConnectedSystemsTimescaleDBProvider(ConnectedSystemsPart2Provider, Elastic
         """
         if type == EntityType.DATASTREAMS:
             # check if linked system exists
-            if not self._exists(System.search().filter("term", id=item["system"])):
+            if not await System().exists(id=item["system"]):
                 raise ProviderItemNotFoundError(f"no system with id {item['system']} found!")
 
             # create in elasticsearch
@@ -122,6 +158,8 @@ class ConnectedSystemsTimescaleDBProvider(ConnectedSystemsPart2Provider, Elastic
 
             try:
                 ds = Datastream(**item)
+                ds.meta.id = identifier
+
                 await ds.save(refresh=True)
                 return identifier
             except Exception as e:
@@ -129,47 +167,89 @@ class ConnectedSystemsTimescaleDBProvider(ConnectedSystemsPart2Provider, Elastic
 
         elif type == EntityType.OBSERVATIONS:
             # check if linked datastream exists
-            datastream_id = item['datastream']
-            if not await self._exists(Datastream.search().filter("term", id=item["datastream"])):
-                raise ProviderItemNotFoundError(f"no datastream with id {datastream_id} found!")
+            if not await self._cache.exists(item['datastream']):
+                raise ProviderItemNotFoundError(f"no datastream with id {item['datastream']} found!")
 
             # create in timescaledb
             # TODO: resolve to different parsers based on something?
-            return await self.put_observations([self.parser.decode(item)])
+            return await self._create_observation([self.parser.decode(item)])
         else:
             raise ProviderGenericError(f"unrecognized type: {type}")
 
-    async def put_observations(self, observations: List[Observation]) -> List[str]:
+    async def _create_observation(self, observations: List[Observation]) -> List[str]:
         res = [""] * len(observations)
         connection: Connection
         async with self._pool.acquire() as connection:
-            async with connection.transaction():
-                # reformat to tuple
-                for idx, obs in enumerate(observations):
-                    # TODO: use prepared statement
-                    res[idx] = str(await connection.fetchval(
-                        "INSERT INTO observations (resulttime, phenomenontime, datastream_id, result, sampling_feature_id, procedure_link, parameters) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING uuid;",
-                        obs.resultTime,
-                        obs.phenomenonTime,
-                        obs.datastream_id,
-                        obs.result,
-                        obs.sampling_feature_id,
-                        obs.procedure_link,
-                        obs.parameters
-                    ))
+            # reformat to tuple
+            for idx, obs in enumerate(observations):
+                # TODO: use prepared statement
+                res[idx] = str(await connection.fetchval(
+                    "INSERT INTO observations (resulttime, phenomenontime, datastream_id, result, sampling_feature_id, procedure_link, parameters) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING uuid;",
+                    obs.resultTime,
+                    obs.phenomenonTime,
+                    obs.datastream_id,
+                    obs.result,
+                    obs.sampling_feature_id,
+                    obs.procedure_link,
+                    obs.parameters
+                ))
         return res
 
+    async def replace(self, type: EntityType, identifier: str, item: Dict):
+        # /req/create-replace-delete/datastream-update-schema
+        # /req/create-replace-delete/observation-schema
+        LOGGER.debug(f"replacing {type} {identifier}")
+        match type:
+            case EntityType.DATASTREAMS:
+                try:
+                    old = await Datastream().get(id=identifier)
+                    new = Datastream(**item)
+                    new.meta.id = old.meta.id
+                    await new.save()
+                except elasticsearch.NotFoundError as e:
+                    raise ProviderItemNotFoundError(user_msg=f"cannot find {type} with id: {identifier}! {e}")
+
+            case EntityType.DATASTREAMS_SCHEMA:
+                return await self._replace_schema(identifier, item)
+
+            case EntityType.OBSERVATIONS:
+                raise ProviderGenericError(user_msg=f"replace/update of observations not supported yet!")
+
     async def update(self, type: EntityType, identifier: str, item: Dict):
-        """
-        Updates an existing item
+        # /req/update/datastream
+        # /req/update/datastream-update-schema
+        # /req/update/observation
+        LOGGER.debug(f"updating {type} {identifier}")
+        match type:
+            case EntityType.DATASTREAMS:
+                try:
+                    entity = await Datastream().get(id=identifier)
+                    await entity.update(**item)
+                except elasticsearch.NotFoundError as e:
+                    raise ProviderItemNotFoundError(user_msg=f"cannot find {type} with id: {identifier}! {e}")
 
-        :param identifier: feature id
-        :param item: `dict` of partial or full item
+            case EntityType.DATASTREAMS_SCHEMA:
+                return await self._replace_schema(identifier, item)
 
-        :returns: `bool` of update result
-        """
+            case EntityType.OBSERVATIONS:
+                raise ProviderGenericError(user_msg=f"replace/update of observations not supported yet!")
 
-        raise NotImplementedError()
+    async def _replace_schema(self, identifier: str, item: Dict):
+        # reject if there are associated observations already
+        parameters = ObservationsParams()
+        parameters.datastream = identifier
+        if len(await self._get_observations(parameters)) > 0:
+            e = ProviderInvalidQueryError(
+                "cannot update/replace schema of datastream which has associated observations")
+            e.http_status_code = HTTPStatus.CONFLICT
+            raise e
+        try:
+            entity = await Datastream().get(id=identifier)
+            # prevent dsl from merging schema instead of overwriting
+            await entity.update(schema=None)
+            await entity.update(schema=item)
+        except elasticsearch.NotFoundError:
+            raise ProviderItemNotFoundError(user_msg=f"cannot find datastream with id: {identifier}!")
 
     async def delete(self, type: EntityType, identifier: str, cascade: bool = False):
         """
@@ -180,7 +260,29 @@ class ConnectedSystemsTimescaleDBProvider(ConnectedSystemsPart2Provider, Elastic
         :returns: `bool` of deletion result
         """
 
-        raise NotImplementedError()
+        match type:
+            case EntityType.DATASTREAMS:
+                # /req/create-replace-delete/datastream-delete-cascade
+                #
+                if cascade:
+                    raise NotImplementedError()
+                else:
+                    # check that no observations exist
+                    parameters = ObservationsParams()
+                    parameters.datastream = identifier
+                    if len(await self._get_observations(parameters)) > 0:
+                        e = ProviderInvalidQueryError(
+                            "cannot delete system with nested resources and cascade=false. "
+                            "ref: /req/create-replace-delete/datastream-delete-cascade")
+                        e.http_status_code = HTTPStatus.CONFLICT
+                        raise e
+                    try:
+                        await Datastream().delete(id=identifier)
+                    except elasticsearch.NotFoundError:
+                        raise ProviderItemNotFoundError(f"No datastream with id {identifier} found!")
+
+            case EntityType.OBSERVATIONS:
+                return await self._delete_observation(identifier)
 
     async def query_datastreams(self, parameters: DatastreamsParams) -> CSAGetResponse:
         """
@@ -189,7 +291,7 @@ class ConnectedSystemsTimescaleDBProvider(ConnectedSystemsPart2Provider, Elastic
         :returns: dict of formatted properties
         """
 
-        query = AsyncSearch(using=self._es, index=self.datastreams_index_name)
+        query = Datastream.search()
         query = parse_csa_params(query, parameters)
         query = parse_temporal_filters(query, parameters)
 
@@ -205,10 +307,32 @@ class ConnectedSystemsTimescaleDBProvider(ConnectedSystemsPart2Provider, Elastic
 
     async def query_observations(self, parameters: ObservationsParams) -> CSAGetResponse:
         """
-        implements queries on observations as specified in openapi-connectedsystems-2
+        implements queries on observations as specified in ogcapi-connectedsystems-2
 
         :returns: dict of formatted properties
         """
+        response = await self._get_observations(parameters)
+        if len(response) > 0:
+            links = []
+            if len(response) == int(parameters.limit):
+                # page is fully filled - we assume a nextpage exists
+                url = self.base_url
+                if parameters.datastream:
+                    url += f"/datastreams/{parameters.datastream}"
+                links.append({
+                    "title": "next",
+                    "rel": "next",
+                    "href": parameters.nextlink()
+                })
+            return [self.parser.encode(row) for row in response], links
+        else:
+            # check if this query returns 404 or 200 with empty body in case of no return
+            if parameters.id:
+                return None
+            else:
+                return [], []
+
+    async def _get_observations(self, parameters: ObservationsParams) -> list:
         q = ObservationQuery()
         q.with_limit(parameters.limit)
 
@@ -220,35 +344,20 @@ class ConnectedSystemsTimescaleDBProvider(ConnectedSystemsPart2Provider, Elastic
             q.with_time("phenomenontime", parameters._phenomenonTime)
         if parameters._resultTime:
             q.with_time("resulttime", parameters._resultTime)
-        if parameters.foi:
-            q.with_foi(parameters.foi)
-        if parameters.observedProperty:
-            q.with_observedproperty(parameters.observedProperty)
         if parameters.datastream:
             q.with_datastream(parameters.datastream)
 
-        connection: Connection
         async with self._pool.acquire() as connection:
-            print("SELECT * FROM observations " + q.to_sql())
-            print(*q.parameters)
-            response = await connection.fetch("SELECT * FROM observations " + q.to_sql(), *q.parameters)
+            LOGGER.debug("SELECT * FROM observations " + q.to_sql())
+            LOGGER.debug(f"{q.parameters}")
+            return await connection.fetch("SELECT * FROM observations " + q.to_sql(), *q.parameters)
 
-            if len(response) > 0:
-                links = []
-                if len(response) == int(parameters.limit):
-                    # page is fully filled - we assume a nextpage exists
-                    url = self.base_url
-                    if parameters.datastream:
-                        url += f"/datastreams/{parameters.datastream}"
-                    links.append({
-                        "title": "next",
-                        "rel": "next",
-                        "href": parameters.nextlink()
-                    })
-                return [self.parser.encode(row) for row in response], links
-            else:
-                # check if this query returns 404 or 200 with empty body in case of no return
-                if parameters.id:
-                    return None
-                else:
-                    return [], []
+    async def _delete_observation(self, identifier: str):
+        q = ObservationQuery()
+        q.with_id([identifier])
+        async with self._pool.acquire() as connection:
+            LOGGER.debug("DELETE FROM observations " + q.to_sql(False))
+            LOGGER.debug(f"{q.parameters}")
+            result: str = await connection.execute("DELETE FROM observations " + q.to_sql(False), *q.parameters)
+            if not result.endswith("1"):
+                raise ProviderItemNotFoundError(f"No observation with id {identifier} found!")

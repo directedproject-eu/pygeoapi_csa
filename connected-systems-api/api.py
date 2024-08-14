@@ -165,37 +165,6 @@ class CSAPI(CSMeta):
             return headers, HTTPStatus.NOT_FOUND, ""
 
     @parse_request
-    async def delete(self,
-                     request: AsyncAPIRequest,
-                     collection: EntityType,
-                     path: Path = None) -> APIResponse:
-        # multiplex provider implementations (part 1 or part 2)
-        if (collection == EntityType.OBSERVATIONS
-                or collection == EntityType.DATASTREAMS
-                or collection == EntityType.DATASTREAMS_SCHEMA):
-            provider = self.provider_part2
-        else:
-            provider = self.provider_part1
-
-        try:
-            await provider.delete(collection, path[1], request.params.get("cascade", False))
-            return [], HTTPStatus.OK, ""
-        except ProviderItemNotFoundError:
-            return self.get_exception(
-                HTTPStatus.NOT_FOUND,
-                request.get_response_headers(**self.api_headers),
-                request.format,
-                'NotFound',
-                "entity not found")
-        except ProviderInvalidQueryError as err:
-            return self.get_exception(
-                HTTPStatus.BAD_REQUEST,
-                request.format,
-                request.get_response_headers(**self.api_headers),
-                'BadRequest',
-                "bad request: " + err.message)
-
-    @parse_request
     async def get(self,
                   request: AsyncAPIRequest,
                   collection: EntityType,
@@ -240,7 +209,7 @@ class CSAPI(CSMeta):
                 handler = self.provider_part2.query_datastreams
                 params = DatastreamsParams()
                 params.schema = True
-                allowed_mimetypes = [ALLOWED_MIMES.F_HTML, ALLOWED_MIMES.F_JSON]
+                allowed_mimetypes = [ALLOWED_MIMES.F_JSON]
             case EntityType.OBSERVATIONS:
                 handler = self.provider_part2.query_observations
                 params = ObservationsParams()
@@ -311,6 +280,37 @@ class CSAPI(CSMeta):
     async def patch(self, request: AsyncAPIRequest, collection: EntityType, path: Path = None):
         LOGGER.warn("TODO: add validation for properties")
         return await self._upsert(request, HTTPMethod.PATCH, collection, path, False)
+
+    @parse_request
+    async def delete(self,
+                     request: AsyncAPIRequest,
+                     collection: EntityType,
+                     path: Path = None) -> APIResponse:
+        # multiplex provider implementations (part 1 or part 2)
+        if (collection == EntityType.OBSERVATIONS
+                or collection == EntityType.DATASTREAMS
+                or collection == EntityType.DATASTREAMS_SCHEMA):
+            provider = self.provider_part2
+        else:
+            provider = self.provider_part1
+
+        try:
+            await provider.delete(collection, path[1], request.params.get("cascade", False))
+            return [], HTTPStatus.OK, ""
+        except ProviderItemNotFoundError:
+            return self.get_exception(
+                HTTPStatus.NOT_FOUND,
+                request.get_response_headers(**self.api_headers),
+                request.format,
+                'NotFound',
+                "entity not found")
+        except ProviderInvalidQueryError as err:
+            return self.get_exception(
+                HTTPStatus.BAD_REQUEST,
+                request.get_response_headers(**self.api_headers),
+                request.format,
+                'BadRequest',
+                "bad request: " + err.message)
 
     async def _upsert(self,
                       request: AsyncAPIRequest,
@@ -425,10 +425,10 @@ class CSAPI(CSMeta):
         return headers, HTTPStatus.OK, content
 
     def _format_json_response(self, request, headers, data, is_collection: bool) -> APIResponse:
+        if data is None:
+            return headers, HTTPStatus.NOT_FOUND, ""
         match request.format:
             case ALLOWED_MIMES.F_GEOJSON.value:
-                if data is None:
-                    return headers, HTTPStatus.NOT_FOUND, ""
                 response = {
                     "type": "FeatureCollection",
                     "features": [item for item in data[0]],

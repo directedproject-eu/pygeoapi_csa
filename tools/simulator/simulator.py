@@ -165,7 +165,7 @@ def run():
     datastream = gen_datastream(system)
     post(f"/systems/{system['id']}/datastreams", datastream)
 
-    for _ in tqdm(range(1_000)):
+    for _ in tqdm(range(1_000_000)):
         post(f"/datastreams/{datastream['id']}/observations", gen_observation(), "application/om+json")
         # sleep(100 / 1000)
 
