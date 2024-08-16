@@ -1,6 +1,7 @@
 import json
 
 import requests
+from tqdm import tqdm
 
 # Manually extracted via: https://registry.o2a-data.de/items?q=vessel&qf=metadata.typeName/vessel
 
@@ -33,6 +34,7 @@ def post(path: str, payload: dict, content_type: str = "application/json"):
     headers = {"Content-Type": content_type}
     response = requests.request("POST", url, json=payload, headers=headers)
     if response.status_code != 204:
+        print(response)
 
 
 def get_item(id: str) -> dict:
@@ -138,7 +140,7 @@ def parse_events(item_id: str, item_name: str) -> list:
                         {
                             "name": item_name,
                             "system": {
-                                "href": f"/systems{item_id}"
+                                "href": f"/systems/{item_id}"
                             }
                         }
                     )
@@ -248,11 +250,11 @@ def parse_system_sml(item_id: str, parent_id: str = None) -> dict:
 
 
 def harvest():
-    for vessel_id in ROOT_ITEMS:
+    for vessel_id in tqdm(ROOT_ITEMS):
         parse_system_sml(vessel_id)
 
         # Post deployments after-the-fact
-        for deployment_id in deployments:
+        for deployment_id in tqdm(deployments, leave=False):
             post("deployments", deployments[deployment_id], "application/sml+json")
 
 

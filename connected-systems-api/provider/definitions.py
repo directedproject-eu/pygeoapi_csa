@@ -164,6 +164,26 @@ class ObservationsParams(FoiObservedpropertyParam, ResulttimePhenomenontimeParam
     datastream: Optional[str] = None
 
 
+class DatastreamSchema(InnerDoc):
+    obsFormat: str
+
+
+class Datastream(AsyncDocument):
+    id = Keyword()
+    system = Keyword()
+    schema = DatastreamSchema()
+
+    class Index:
+        name = "datastreams"
+
+
+class Collection(AsyncDocument):
+    id = Keyword()
+
+    class Index:
+        name = "collections"
+
+
 class CharacteristicsProp(InnerDoc):
     value = Keyword()
 

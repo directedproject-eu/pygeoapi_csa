@@ -186,10 +186,6 @@ class CSMeta:
                                          fcm, request.locale)
             return headers, HTTPStatus.OK, content
 
-        if request.format == F_JSONLD:
-            return headers, HTTPStatus.OK, to_json(
-                self.fcmld, self.pretty_print)
-
         return headers, HTTPStatus.OK, to_json(fcm, self.pretty_print)
 
     @parse_request

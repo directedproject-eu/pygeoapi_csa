@@ -19,20 +19,7 @@ from ..connector_elastic import ElasticsearchConnector, ElasticSearchConfig, par
 from ..definitions import *
 
 LOGGER = logging.getLogger(__name__)
-LOGGER.setLevel('DEBUG')
-
-
-class Schema(InnerDoc):
-    obsFormat: str
-
-
-class Datastream(AsyncDocument):
-    id = Keyword()
-    system = Keyword()
-    schema = Schema()
-
-    class Index:
-        name = "datastreams"
+# LOGGER.setLevel('DEBUG')
 
 
 class Cache:
@@ -45,13 +32,16 @@ class Cache:
     async def exists(self, identifier: str) -> bool:
         if identifier in self.__cache:
             # Identifier is in cache
+            print("cache hit")
             return True
-        elif await (Datastream.search().filter("term", id=identifier).count()) > 0:
+        elif await Datastream.exists(id=identifier):
+            print("updating cache")
             # Request and update cache if matching
             self.__cache[self.__pointer] = identifier
             self.__pointer = (self.__pointer + 1) % 128
             return True
         else:
+            print("negative miss")
             return False
 
     def remove(self, identifier: str):

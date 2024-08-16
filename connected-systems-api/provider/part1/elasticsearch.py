@@ -18,7 +18,7 @@ import logging
 import uuid
 
 import elasticsearch
-from elasticsearch_dsl import AsyncSearch, async_connections
+from elasticsearch_dsl import async_connections
 from pygeoapi.provider.base import ProviderGenericError, ProviderItemNotFoundError
 
 from ..connector_elastic import ElasticsearchConnector, ElasticSearchConfig, parse_csa_params, parse_spatial_params, \
@@ -53,6 +53,7 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchCon
         await self.connect_elasticsearch(self._es_config)
 
     async def setup(self):
+        await Collection.init()
         await System.init()
         await Deployment.init()
         await Procedure.init()
@@ -71,7 +72,7 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchCon
             {
                 "id": "all_systems",
                 "type": "collection",
-                "title": "All Connected Systems",
+                "title": "All Systems Instances",
                 "description": "All systems registered on this server (e.g. platforms, sensors, actuators, processes)",
                 "itemType": "feature",
                 "featureType": "system",
@@ -81,12 +82,6 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchCon
                         "title": "This document (JSON)",
                         "href": "/collections/all_systems",
                         "type": "application/json"
-                    },
-                    {
-                        "rel": "self",
-                        "title": "This document (HTML)",
-                        "href": "/collections/all_systems?f=html",
-                        "type": "text/html"
                     },
                     {
                         "rel": "items",
@@ -114,12 +109,6 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchCon
                         "rel": "self",
                         "title": "This document (JSON)",
                         "href": "/collections/all_datastreams",
-                        "type": "application/json"
-                    },
-                    {
-                        "rel": "self",
-                        "title": "This document (HTML)",
-                        "href": "/collections/all_datastreams?f=html",
                         "type": "application/json"
                     },
                     {
@@ -151,12 +140,6 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchCon
                         "type": "application/json"
                     },
                     {
-                        "rel": "self",
-                        "title": "This document (HTML)",
-                        "href": "/collections/all_fois?f=html",
-                        "type": "text/html"
-                    },
-                    {
                         "rel": "items",
                         "title": "Access the features of interests in this collection (HTML)",
                         "href": "/featuresOfInterest",
@@ -185,12 +168,6 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchCon
                         "type": "application/json"
                     },
                     {
-                        "rel": "self",
-                        "title": "This document (HTML)",
-                        "href": "/collections/all_procedures?f=html",
-                        "type": "application/json"
-                    },
-                    {
                         "rel": "items",
                         "title": "Access the procedures in this collection (HTML)",
                         "href": "procedures",
@@ -207,49 +184,38 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchCon
         ]
 
         for coll in mandatory:
-            query = AsyncSearch(index=self.collections_index_name)
-            query = query.filter("term", id=coll["id"])
-            result = (await self._es.search(index=self.collections_index_name, body=query.to_dict()))["hits"]
-            if len(result["hits"]) == 0:
-                await self._es.index(index=self.collections_index_name,
-                                     id=coll["id"],
-                                     document=coll,
-                                     refresh=True)
+            if not await Collection.exists(id=coll["id"]):
+                c = Collection(**coll)
+                c.meta.id = coll["id"]
+                await c.save()
+
             LOGGER.critical(f"creating mandatory collection {coll['id']}")
 
-    # async def query_collections(self, parameters: CollectionParams) -> Dict[str, Dict]:
-    #     query = AsyncSearch(index=self.collections_index_name)
-    #
-    #     query = parse_csa_params(query, parameters)
-    #     query = parse_spatial_params(query, parameters)
-    #
-    #
-    #     found = (await self._es.search(query))["hits"]
-    #     collections = {}
-    #     if found["total"]["value"] > 0:
-    #         for h in found["hits"]:
-    #             collections[h["_source"]["id"]] = h["_source"]
-    #     return collections
+    async def query_collections(self, parameters: CollectionParams) -> CSAGetResponse:
+        query = Collection().search()
 
-    # async def query_collection_items(self, collection_id: str, parameters: CSAParams) -> CSAGetResponse:
-    #     # TODO: implement this for non-mandatory collections
-    #     if collection_id == "all_systems":
-    #         index = self.systems_index_name
-    #     elif collection_id == "all_procedures":
-    #         index = self.procedures_index_name
-    #     elif collection_id == "all_fois":
-    #         index = self.samplingfeatures_index_name
-    #     else:
-    #         # TODO: maybe throw an error here?
-    #         return [], []
-    #
-    #     query = AsyncSearch(index=index)
-    #
-    #     if parameters.id:
-    #         query = query.filter("terms", _id=parameters.id)
-    #
-    #     LOGGER.debug(json.dumps(query, indent=True, default=str))
-    #     return await self.search(index, query, parameters)
+        query = parse_csa_params(query, parameters)
+        query = parse_spatial_params(query, parameters)
+
+        return await self.search(query, parameters)
+
+    async def query_collection_items(self, collection_id: str, parameters: CSAParams) -> CSAGetResponse:
+        # TODO: implement this for non-mandatory collections
+        if collection_id == "all_systems":
+            query = System().search()
+        elif collection_id == "all_procedures":
+            query = Procedure().search()
+        elif collection_id == "all_datastreams":
+            query = Datastream().search()
+        elif collection_id == "all_fois":
+            query = SamplingFeature().search()
+        else:
+            return None
+
+        if parameters.id:
+            query = query.filter("terms", _id=parameters.id)
+
+        return await self.search(query, parameters)
 
     async def query_systems(self, parameters: SystemsParams) -> CSAGetResponse:
         query = System.search()
@@ -356,10 +322,7 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchCon
 
         try:
             entity.meta.id = identifier
-            print(entity.meta.id)
             if await entity.save():
-
-                test = await System.get(id=identifier)
                 return identifier
             else:
                 raise Exception("cannot save identifier!")

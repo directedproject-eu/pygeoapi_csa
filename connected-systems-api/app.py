@@ -128,9 +128,9 @@ async def collection_items(collection_id: str, item_id: str = None):
 
     # Check CSA for matching collection
     if response_code != 200:
-        response_headers, response_code, response_body = csapi_.get_collection_items(request,
-                                                                                     collection_id,
-                                                                                     item_id)
+        response_headers, response_code, response_body = await csapi_.get_collection_items(request,
+                                                                                           collection_id,
+                                                                                           item_id)
     return await to_response((response_headers, response_code, response_body))
 
 

@@ -86,11 +86,6 @@ class CSAPI(CSMeta):
         """
         Adds Connected-Systems collections to existing response
         """
-
-        if self.provider_part1 is None:
-            # TODO: what to return here?
-            raise NotImplementedError()
-
         # Start new response object if resources is empty, else reuse existing object
         fcm = None
         if template[1] == HTTPStatus.NOT_FOUND:
@@ -117,21 +112,12 @@ class CSAPI(CSMeta):
         headers = template[0]
         if data:
             if collection_id is not None:
-                fcm = data[collection_id]
-                if original_format == F_HTML:  # render
-                    headers["Content-Type"] = "text/html"
-                    content = render_j2_template(self.tpl_config,
-                                                 'templates/connected-systems/collection/item.html',
-                                                 fcm,
-                                                 request.locale)
-                    return headers, HTTPStatus.OK, content
-                else:
-                    headers["Content-Type"] = "application/json"
-                    return headers, HTTPStatus.OK, to_json(fcm, self.pretty_print)
+                headers["Content-Type"] = "application/json"
+                return headers, HTTPStatus.OK, to_json(data[0][0], self.pretty_print)
             else:
-                fcm['collections'].extend(coll for _, coll in data.items())
+                fcm['collections'].extend(data[0])
                 if original_format == F_HTML:  # render
-                    fcm['collections_path'] = self.get_collections_url()
+                    fcm['collections_path'] = f"{self.base_url}/collections"
                     headers["Content-Type"] = "text/html"
                     content = render_j2_template(self.tpl_config,
                                                  'collections/index.html',
@@ -146,19 +132,14 @@ class CSAPI(CSMeta):
 
     @parse_request
     async def get_collection_items(self, request: AsyncAPIRequest, collection_id: str, item_id: str) -> APIResponse:
-
-        if self.provider_part1 is None:
-            # TODO: what to return here?
-            raise NotImplementedError()
-
         headers = request.get_response_headers(**self.api_headers)
         try:
             request_params = request.params
             if item_id:
                 request_params['id'] = item_id
 
-            parameters = parse_query_parameters(CollectionParams(), request_params,
-                                                self.base_url + "/" + request.path_info)
+            parameters = parse_query_parameters(CollectionParams(), request_params, self.base_url + "/" +
+                                                request.path_info)
             data = await self.provider_part1.query_collection_items(collection_id, parameters)
             return self._format_json_response(request, headers, data, item_id is None)
         except ProviderItemNotFoundError:

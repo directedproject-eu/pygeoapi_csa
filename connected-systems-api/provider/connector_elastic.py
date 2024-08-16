@@ -13,7 +13,7 @@ from pygeoapi.provider.base import ProviderConnectionError, ProviderInvalidDataE
     ProviderItemNotFoundError
 
 LOGGER = logging.getLogger(__name__)
-# LOGGER.setLevel('DEBUG')
+LOGGER.setLevel('DEBUG')
 
 
 def parse_datetime_params(query: AsyncSearch, parameters: DatetimeParam) -> AsyncSearch:
