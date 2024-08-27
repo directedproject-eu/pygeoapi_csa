@@ -1,8 +1,8 @@
-import datetime
 import random
 import uuid
 from time import sleep
 from typing import Dict
+from datetime import datetime
 
 import requests
 from tqdm import tqdm
