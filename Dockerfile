@@ -33,6 +33,9 @@ COPY docker/examples/hybrid-csa/openapi-config-csa.yml .
 COPY docker/examples/hybrid-csa/pygeoapi-config.yml .
 COPY hypercorn.conf.py .
 
+ENV PYGEOAPI_CONFIG=/app/pygeoapi-config.yml
+ENV PYGEOAPI_OPENAPI=/app/openapi-config-csa.yml
+
 WORKDIR /app/connected-systems-api
 CMD ["sh", "-c", "python setup.py && hypercorn -c ../hypercorn.conf.py app:APP"]
 
