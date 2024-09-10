@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # =================================================================
+import os
+import pathlib
 from http import HTTPMethod
 from typing import Callable, Self
 
@@ -26,6 +28,9 @@ from util import *
 from meta import CSMeta
 
 from jsonschema import validate
+
+
+package_dir = pathlib.Path(__file__).parent
 
 
 class CSAPI(CSMeta):
@@ -58,7 +63,7 @@ class CSAPI(CSMeta):
                                        (EntityType.SAMPLING_FEATURES,
                                         "schemas/connected-systems/samplingFeature.schema"),
                                        (EntityType.DEPLOYMENTS, "schemas/connected-systems/deployment.schema")]:
-                    with open(location, 'r') as definition:
+                    with open(os.path.join(package_dir, location), 'r') as definition:
                         self.csa_schemas[name] = json.load(definition)
             api_part2 = config['dynamic-resources'].get('connected-systems-api-part2', None)
 
@@ -73,7 +78,7 @@ class CSAPI(CSMeta):
                 for name, location in [
                     (EntityType.DATASTREAMS, "schemas/connected-systems/datastream.schema"),
                     (EntityType.OBSERVATIONS, "schemas/connected-systems/observation.schema")]:
-                    with open(location, 'r') as definition:
+                    with open(os.path.join(package_dir, location), 'r') as definition:
                         self.csa_schemas[name] = json.load(definition)
 
     @parse_request
