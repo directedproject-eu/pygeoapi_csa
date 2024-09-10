@@ -9,13 +9,13 @@ LOGGER = logging.getLogger(__name__)
 @dataclass(slots=True)
 class Observation:
     datastream_id: str  # id of the associated datastream
-    resultTime: datetime
+    resultTime: DateTime
     result: bytes  # raw result data
 
     id: Optional[str] = None  # unique identifier
     sampling_feature_id: Optional[str] = None
     procedure_link: Optional[str] = None
-    phenomenonTime: Optional[datetime] = None
+    phenomenonTime: Optional[DateTime] = None
     parameters: Optional[str] = None
 
 

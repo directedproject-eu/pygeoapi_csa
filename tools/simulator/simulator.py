@@ -2,7 +2,7 @@ import random
 import uuid
 from time import sleep
 from typing import Dict
-from datetime import datetime
+from datetime import datetime as DateTime
 
 import requests
 from tqdm import tqdm
@@ -36,7 +36,7 @@ def gen_observation() -> dict:
     global last_result
     last_result = last_result + random.uniform(-0.15, 0.15)
     return {
-        "resultTime": datetime.datetime.now().isoformat(),
+        "resultTime": DateTime.now().isoformat(),
         "result": last_result
     }
 

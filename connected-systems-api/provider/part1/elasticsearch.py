@@ -15,7 +15,7 @@
 # =================================================================
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime as DateTime
 
 
 import elasticsearch
@@ -443,7 +443,7 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchCon
     def _format_date_range(self, key: str, item: Dict) -> None:
         if item.get(key):
             time = item.get(key)
-            now = datetime.now()
+            now = DateTime.now()
             if time[0] == "now":
                 start = now
             else:
