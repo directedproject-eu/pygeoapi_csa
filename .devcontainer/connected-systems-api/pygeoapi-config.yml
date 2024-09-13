@@ -1,0 +1,127 @@
+server:
+  bind:
+    host: 0.0.0.0
+    port: 5000
+  url: http://localhost:5000
+  mimetype: application/json; charset=UTF-8
+  encoding: utf-8
+  gzip: false
+  languages:
+    - en-US
+  pretty_print: false
+  connected_systems: true
+  limit: 10
+  templates:
+    path: /templates
+  map:
+    url: https://tile.openstreetmap.org/{z}/{x}/{y}.png
+    attribution: '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap contributors</a>'
+
+logging:
+  level: ERROR
+  #logfile: /tmp/pygeoapi.log
+
+metadata:
+  identification:
+    title:
+      en: connected-systems-pygeoapi
+    description:
+      en: OGC Connected-Systems API backed by elasticsearch
+    keywords:
+      en:
+        - geospatial
+        - data
+        - api
+    keywords_type: theme
+    terms_of_service:
+    url: http://localhost
+  license:
+    name: CC-BY 4.0 license
+    url: https://creativecommons.org/licenses/by/4.0/
+  provider:
+    name: 52°North Spatial Information Research GmbH
+    url: https://52north.org
+  contact:
+    name: Speckamp, Jan
+    position:
+    address: j.speckamp@52north.org
+    city: Münster
+    stateorprovince: NRW
+    postalcode: 1
+    country: Germany
+    phone: +xx-xxx-xxx-xxxx
+    fax: +xx-xxx-xxx-xxxx
+    email: you@example.org
+    url: Contact URL
+    hours: Mo-Fr 08:00-17:00
+    instructions: During hours of service. Off on weekends.
+    role: pointOfContact
+resources: 
+  ev_einzugsgebiete:
+    type: collection
+    title: Catchments EV NW
+    description: Pegeleinzugsgebiete des Rhein-Erft-Kreises NW
+    keywords:
+      - Germany
+      - NW
+      - Rhein-Erft
+      - Pegeleinzugsgebiet
+    extents:
+      spatial:
+          bbox: [6.342671, 50.468431, 7.105001, 51.190349]
+          crs: http://www.opengis.net/def/crs/OGC/1.3/CRS84
+    providers:
+      - type: feature
+        name: OGR
+        data:
+          source_type: ESRI Shapefile
+          source: /srv/data/howis/pegelgebiete2.shp
+          source_options:
+            ADJUST_GEOM_TYPE: FIRST_SHAPE
+          gdal_ogr_options:
+            SHPT: POLYGON
+        id_field: PEGEL_EZG
+        layer: pegelgebiete2
+
+dynamic-resources:
+  #    connected-systems-api:
+  #        type: connected-systems
+  #        title: "toardb-adapter"
+  #        description: "Adapter to TOAR DB"
+  #        provider:
+  #            type: toardb-adapter
+  #            name: toardb
+  connected-systems-api-part1:
+    type: connected-systems
+    title: "elasticsearch-csa-adapter"
+    description: "Adapter to Elasticsearch CSA-Part1 Backend"
+    keywords: [ ]
+    provider:
+      type: elastic-csa-adapter
+      name: ElasticSearchConnectedSystems
+      host: es01
+      port: 9200
+      dbname: csa
+      user: elastic
+      password: password
+
+  connected-systems-api-part2:
+    type: connected-systems
+    title: "timescale-csa-adapter"
+    description: "Adapter to TimescaleDB CSA-Part2 Backend"
+    keywords: [ ]
+    provider:
+      type: timescale-csa-adapter
+      name: TimescaleDBConnectedSystems
+      timescale:
+        host: timescaledb
+        port: 5432
+        dbname: csa
+        user: timescaledb
+        password: password
+      elastic:
+        host: es01
+        port: 9200
+        dbname: csa
+        user: elastic
+        password: password
