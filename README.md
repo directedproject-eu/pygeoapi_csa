@@ -45,6 +45,13 @@ PYGEOAPI_OPENAPI=<path-to-openapi-config-csa.yml> \
 python3 connected-systems-api/flask_app.py
 ```
 
+### devcontainer
+
+This repository contains [devcontainer](https://code.visualstudio.com/docs/devcontainers/containers) configurations.
+Before using them, the `docker/examples/hybrid-csa/.env-sample` or any other working `.env` MUST be provided by copying it to the `.devcontainer/` folder.
+
+Remember to rebuild the containers, if any other example set-up from `docker/examples` was executed beforehand.
+
 ## Usage
 
 The API is accessible at `<host>:5000` and provides a HTML landing page for easy navigation.
