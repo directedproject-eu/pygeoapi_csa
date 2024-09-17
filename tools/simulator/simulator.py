@@ -12,6 +12,7 @@ last_result = 10
 
 #url_stub = "http://connected-systems.docker.srv.int.52north.org"
 url_stub = "http://localhost:5000"
+num_of_obs_to_insert = 1_000_000
 
 
 THREAD_POOL = 16
@@ -32,10 +33,21 @@ def post(path: str, payload: dict, content_type: str = "application/json"):
     # print(response.text)
 
 
-def gen_observation() -> dict:
+def gen_observation(datastream_id: str) -> dict:
+    # see https://docs.ogc.org/DRAFTS/23-002r0.html#clause-json-observation
+    # example:
+    # {
+    #   "id": "1h6pmb3ntfmogfppknk9aefpvs",
+    #   "datastream@id": "958tf25kjm2f6",
+    #   "phenomenonTime": "2021-03-15T04:53:34Z",
+    #   "resultTime": "2021-03-15T04:53:34Z",
+    #   "result": 23.5
+    # }
     global last_result
     last_result = last_result + random.uniform(-0.15, 0.15)
     return {
+        "id": str(uuid.uuid4()),
+        "datastream@id": datastream_id,
         "resultTime": DateTime.now().isoformat(),
         "result": last_result
     }
@@ -165,8 +177,8 @@ def run():
     datastream = gen_datastream(system)
     post(f"/systems/{system['id']}/datastreams", datastream)
 
-    for _ in tqdm(range(1_000_000)):
-        post(f"/datastreams/{datastream['id']}/observations", gen_observation(), "application/om+json")
+    for _ in tqdm(range(num_of_obs_to_insert)):
+        post(f"/datastreams/{datastream['id']}/observations", gen_observation(datastream['id']), "application/om+json")
         # sleep(100 / 1000)
 
 
