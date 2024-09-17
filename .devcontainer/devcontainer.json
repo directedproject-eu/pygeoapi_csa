@@ -12,7 +12,10 @@
         "extensions": [
 				  "ms-python.python",
           "streetsidesoftware.code-spell-checker"
-        ]
+        ],
+        "settings": {
+          "python.defaultInterpreterPath": "/usr/local/bin/python"
+        }
       }
     }
   }
