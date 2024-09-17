@@ -1,4 +1,4 @@
-FROM python:3.12-alpine as base
+FROM python:3.12-alpine AS base
 
 LABEL maintainer="Jan Speckamp <j.speckamp@52north.org>" \
       org.opencontainers.image.authors="Jan Speckamp <j.speckamp@52north.org>" \
@@ -39,12 +39,12 @@ ENV PYGEOAPI_OPENAPI=/app/openapi-config-csa.yml
 WORKDIR /app/connected-systems-api
 CMD ["sh", "-c", "python setup.py && hypercorn -c ../hypercorn.conf.py app:APP"]
 
-FROM base as toardb
+FROM base AS toardb
 # individual requirements for toardb-provider
 COPY requirements_toardb_csa.txt .
 RUN pip install -r requirements_toardb_csa.txt
 
-FROM base as hybrid
+FROM base AS hybrid
 # individual requirements for hybrid-provider
 COPY requirements_hybrid_csa.txt .
 RUN pip install -r requirements_hybrid_csa.txt
