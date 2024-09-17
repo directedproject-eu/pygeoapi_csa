@@ -4,10 +4,25 @@ Proof of Concept of the OGC Connected Systems API based on pygeoapi
 
 ## Installation
 
+### Docker
+
+Example Setups for each backend are provided in the respective subfolder in the `./docker/` subdirectory.
+
+Build appropriate docker container (choose either target)
+
+```commandline
+docker compose build connected-systems-api
+```
+
+Note: When building manually make sure to specify the `target` as either `elasticsearch` or `toardb`.
+
+```commandline
+docker build --target=<elasticsearch|toardb> .
+```
+
 ### Local/Development Installation
 
-The specific installation instructions depend on the actual backend to be used, as each backend may require additional
-dependencies.
+The specific installation instructions depend on the actual backend to be used, as each backend may require additional dependencies.
 
 Installation of requirements:
 
@@ -31,29 +46,12 @@ The application can then be started from the root directory via
 python3 connected-systems-api/app.py 
 ```
 
-### Docker
-
-Example Setups for each backend are provided in the respective subfolder in the `docker` subdirectory.
-
-Build appropriate docker container (choose either target)
-
-```commandline
-docker compose build connected-systems-api
-```
-
-Note: When building manually make sure to specify the `target` as either `elasticsearch` or `toardb`.
-
-```commandline
-docker build --target=<elasticsearch|toardb> .
-```
-
-# Usage
+## Usage
 
 The API is accessible at `<host>:5000` and provides a HTML landing page for easy navigation.
 
-# License
+## License
 
 The software is licensed under the `Apache 2.0 License`. See [LICENSE.md](LICENSE.md) for details.
 
-# Contributors
-
+## Contributors
