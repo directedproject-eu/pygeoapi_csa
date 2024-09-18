@@ -10,7 +10,7 @@ csapi_ = CSAPI(CONFIG, OPENAPI)
 
 
 async def setup_db():
-    """ Initialize peristent database/provider connections """
+    """ Initialize persistent database/provider connections """
     if csapi_.provider_part1:
         await csapi_.provider_part1.open()
         await csapi_.provider_part1.setup()
