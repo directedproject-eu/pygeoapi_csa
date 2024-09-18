@@ -43,17 +43,16 @@ metadata:
     url: https://52north.org
   contact:
     name: Speckamp, Jan
-    position:
-    address: j.speckamp@52north.org
+    position: Software Solutions Architect
+    address: Martin-Luther-King-Weg 24
     city: Münster
     stateorprovince: NRW
-    postalcode: 1
+    postalcode: 48155
     country: Germany
-    phone: +xx-xxx-xxx-xxxx
-    fax: +xx-xxx-xxx-xxxx
-    email: you@example.org
-    url: Contact URL
-    hours: Mo-Fr 08:00-17:00
+    phone: +49-251-396371-0
+    email: j.speckamp+csa-development@52north.org
+    url: https://52north.org/about-us/contact-us/
+    hours: Mo-Fr 09:00-16:00
     instructions: During hours of service. Off on weekends.
     role: pointOfContact
 resources: 
