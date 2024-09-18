@@ -31,7 +31,7 @@ services:
       - ../connected-systems-api/:/app/connected-systems-api/
       - ./connected-systems-api/openapi-config-csa.yml:/app/openapi-config-csa.yml
       - ./connected-systems-api/pygeoapi-config.yml:/app/pygeoapi-config.yml
-      - ./data/:/srv/data/howis/
+      - ./data/:/srv/data/
       - ./_vscode/:/app/.vscode
     ports:
       - 5000:5000
