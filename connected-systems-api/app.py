@@ -93,7 +93,7 @@ async def conformance():
 
 @APP.before_serving
 async def init_db():
-    """ Initialize peristent database/provider connections """
+    """ Initialize persistent database/provider connections """
     if csapi_.provider_part1:
         await csapi_.provider_part1.open()
     if csapi_.provider_part2:
