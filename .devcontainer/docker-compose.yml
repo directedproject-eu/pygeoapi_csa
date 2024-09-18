@@ -29,8 +29,8 @@ services:
       target: hybrid
     volumes:
       - ../connected-systems-api/:/app/connected-systems-api/
-      - ./connected-systems-api/openapi-config-csa.yml:/app/openapi-config-csa.yml
-      - ./connected-systems-api/pygeoapi-config.yml:/app/pygeoapi-config.yml
+      - ./connected-systems-api/openapi-config-csa.yml:/app/connected-systems-api/openapi-config-csa.yml
+      - ./connected-systems-api/pygeoapi-config.yml:/app/connected-systems-api/pygeoapi-config.yml
       - ./data/:/srv/data/
       - ./_vscode/:/app/.vscode
     ports:
