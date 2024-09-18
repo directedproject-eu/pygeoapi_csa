@@ -20,6 +20,7 @@ from datetime import datetime as DateTime
 
 import elasticsearch
 from elasticsearch_dsl import async_connections
+from elasticsearch_dsl.async_connections import connections
 from pygeoapi.provider.base import ProviderGenericError, ProviderItemNotFoundError
 
 from ..connector_elastic import ElasticsearchConnector, ElasticSearchConfig, parse_csa_params, parse_spatial_params, \
@@ -54,12 +55,20 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchCon
         await self.connect_elasticsearch(self._es_config)
 
     async def setup(self):
-        await Collection.init()
-        await System.init()
-        await Deployment.init()
-        await Procedure.init()
-        await SamplingFeature.init()
-        await Property.init()
+        client = connections.get_connection()
+
+        if not await client.indices.exists(index=Collection.Index.name):
+            await Collection.init()
+        if not await client.indices.exists(index=System.Index.name):
+            await System.init()
+        if not await client.indices.exists(index=Deployment.Index.name):
+            await Deployment.init()
+        if not await client.indices.exists(index=Procedure.Index.name):
+            await Procedure.init()
+        if not await client.indices.exists(index=SamplingFeature.Index.name):
+            await SamplingFeature.init()
+        if not await client.indices.exists(index=Property.Index.name):
+            await Property.init()
         await self.__create_mandatory_collections()
 
     async def close(self):
