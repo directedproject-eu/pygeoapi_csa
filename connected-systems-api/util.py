@@ -18,7 +18,13 @@ class ALLOWED_MIMES(Enum):
     F_SWEJSON = "application/swe+json"
 
     def all(self):
-        return [self.F_HTML, self.F_GEOJSON, self.F_SMLJSON, self.F_OMJSON, self.F_SWEJSON]
+        return [self.F_HTML, self.F_JSON, self.F_GEOJSON, self.F_SMLJSON, self.F_OMJSON,
+                self.F_SWEJSON]
+
+    @classmethod
+    def values(cls):
+        return [cls.F_HTML.value, cls.F_JSON.value, cls.F_GEOJSON.value, cls.F_SMLJSON.value,
+                cls.F_OMJSON.value, cls.F_SWEJSON.value]
 
 
 class AsyncAPIRequest(APIRequest):
@@ -34,6 +40,13 @@ class AsyncAPIRequest(APIRequest):
         if self._format in (f.value.lower() for f in (allowed_formats or ())):
             return True
         return False
+
+    def _get_format(self, headers) -> Union[str, None]:
+        if f := super()._get_format(headers):
+            return f
+        else:
+            h = headers.get('accept', headers.get('Accept', '')).strip()  # noqa
+            return h if h in ALLOWED_MIMES.values() else None
 
     def get_response_headers(self, force_lang: l10n.Locale = None,
                              force_type: str = None,

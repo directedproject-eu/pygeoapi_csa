@@ -148,7 +148,7 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchCon
                     {
                         "rel": "items",
                         "title": "Access the features of interests in this collection (JSON)",
-                        "href": "/featuresOfInterest?f=json",
+                        "href": "/featuresOfInterest?f=application/json",
                         "type": "application/json"
                     }
                 ]

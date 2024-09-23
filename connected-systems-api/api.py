@@ -398,6 +398,13 @@ class CSAPI(CSMeta):
                 ]
             }
 
+        data["links"] = [
+            {
+                "rel": "alternate",
+                "type": "application/json",
+                "href": "?f=application/json"
+            }
+        ]
         content = render_j2_template(self.tpl_config,
                                      'templates/connected-systems/viewer.html',
                                      data,
