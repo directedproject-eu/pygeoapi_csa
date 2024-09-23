@@ -14,18 +14,17 @@
 # limitations under the License.
 # =================================================================
 from http import HTTPMethod
-from typing import Callable, Self
 
 import jsonschema
+from jsonschema import validate
 from pygeoapi.api import *
+from pygeoapi.flask_app import CONFIG, OPENAPI
 from pygeoapi.provider.base import ProviderItemNotFoundError
-
 from pygeoapi.util import render_j2_template, to_json
+
+from meta import CSMeta
 from provider.definitions import *
 from util import *
-from meta import CSMeta
-
-from jsonschema import validate
 
 
 class CSAPI(CSMeta):
@@ -82,7 +81,7 @@ class CSAPI(CSMeta):
                               request: AsyncAPIRequest,
                               template: Tuple[dict, int, str],
                               original_format: str,
-                              collection_id: str) -> APIResponse:
+                              collection_id: str = None) -> APIResponse:
         """
         Adds Connected-Systems collections to existing response
         """
@@ -423,3 +422,12 @@ class CSAPI(CSMeta):
                 } if is_collection else data[0][0]
 
                 return headers, HTTPStatus.OK, to_json(response, self.pretty_print)
+
+
+PLUGINS["provider"]["toardb"] = "provider.toardb_csa.ToarDBProvider"
+PLUGINS["provider"]["ElasticSearchConnectedSystems"] = \
+    "provider.part1.elasticsearch.ConnectedSystemsESProvider"
+PLUGINS["provider"]["TimescaleDBConnectedSystems"] = \
+    "provider.part2.timescaledb.ConnectedSystemsTimescaleDBProvider"
+
+csapi_ = CSAPI(CONFIG, OPENAPI)

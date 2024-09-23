@@ -1,16 +1,14 @@
-import asyncio
+import json
 import json
 import logging
-from typing import Coroutine, Any, Union
+from typing import Union
 
-from elasticsearch import AsyncElasticsearch
-from elasticsearch_dsl import AsyncSearch, Document
 from elastic_transport import NodeConfig
+from elasticsearch_dsl import AsyncSearch
 from elasticsearch_dsl.async_connections import connections
+from pygeoapi.provider.base import ProviderConnectionError, ProviderItemNotFoundError
 
 from .definitions import *
-from pygeoapi.provider.base import ProviderConnectionError, ProviderInvalidDataError, ProviderQueryError, \
-    ProviderItemNotFoundError
 
 LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel('DEBUG')

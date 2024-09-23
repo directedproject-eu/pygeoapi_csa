@@ -3,6 +3,7 @@ from typing import Self, Union, Tuple, Optional
 
 from pygeoapi import l10n
 from pygeoapi.api import APIRequest
+from quart import make_response
 
 APIResponse = Tuple[dict | None, int, str]
 Path = Union[Tuple[str, str], None]
@@ -54,3 +55,26 @@ def parse_request(func):
             return await func(cls, req_out)
 
     return inner
+
+
+class CompatibilityRequest:
+    data = None
+    headers = None
+    args = None
+
+    def __init__(self, data, headers, args):
+        self.data = data
+        self.headers = headers
+        self.args = args
+
+
+async def to_response(result: APIResponse):
+    """
+    Creates a Quart Response object and updates matching headers.
+
+    :param result: The result of the API call.
+                   This should be a tuple of (headers, status, content).
+
+    :returns: A Response instance.
+    """
+    return await make_response(result[2], result[1], result[0])
