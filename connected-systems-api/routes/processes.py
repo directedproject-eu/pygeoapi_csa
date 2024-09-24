@@ -50,7 +50,7 @@ async def execute_process_jobs(process_id):
 
     :returns: HTTP response
     """
-    compat = CompatibilityRequest(None, request.headers, request.args)
+    compat = CompatibilityRequest(await request.body, request.headers, request.args)
 
     return await to_response(api_.execute_process(compat, process_id))
 
