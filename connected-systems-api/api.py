@@ -117,7 +117,7 @@ class CSAPI(CSMeta):
         if template[1] == HTTPStatus.NOT_FOUND:
             fcm = {"collections": [], "links": []}
         else:
-            fcm = json.loads(template[2])
+            fcm = orjson.loads(template[2])
 
         # query collections
         data = None
@@ -139,7 +139,7 @@ class CSAPI(CSMeta):
         if data:
             if collection_id is not None:
                 headers["Content-Type"] = "application/json"
-                return headers, HTTPStatus.OK, to_json(data[0][0], self.pretty_print)
+                return headers, HTTPStatus.OK, orjson.dumps(data[0][0])
             else:
                 fcm['collections'].extend(data[0])
                 if original_format == F_HTML:  # render
@@ -152,9 +152,9 @@ class CSAPI(CSMeta):
                     return headers, HTTPStatus.OK, content
                 else:
                     headers["Content-Type"] = "application/json"
-                    return headers, HTTPStatus.OK, to_json(fcm, self.pretty_print)
+                    return headers, HTTPStatus.OK, orjson.dumps(fcm)
 
-        return headers, HTTPStatus.OK, to_json(fcm, self.pretty_print)
+        return headers, HTTPStatus.OK, orjson.dumps(fcm)
 
     @parse_request
     async def get_collection_items(self, request: AsyncAPIRequest, collection_id: str, item_id: str) -> APIResponse:
@@ -386,7 +386,7 @@ class CSAPI(CSMeta):
                 case _:
                     raise Exception(f"unrecognized HTTMethod {method}")
 
-            return headers, HTTPStatus.NO_CONTENT, to_json(await response, self.pretty_print)
+            return headers, HTTPStatus.OK, orjson.dumps(await response)
         except Exception as ex:
             return self.get_exception(
                 HTTPStatus.BAD_REQUEST,
@@ -458,14 +458,14 @@ class CSAPI(CSMeta):
                     "features": [item for item in data[0]],
                     "links": [link for link in data[1]],
                 } if is_collection else data[0][0]
-                return headers, HTTPStatus.OK, to_json(response, self.pretty_print)
+                return headers, HTTPStatus.OK, orjson.dumps(response)
             case _:
                 response = {
                     "items": [item for item in data[0]],
                     "links": [link for link in data[1]],
                 } if is_collection else data[0][0]
 
-                return headers, HTTPStatus.OK, to_json(response, self.pretty_print)
+                return headers, HTTPStatus.OK, orjson.dumps(response)
 
 
 PLUGINS["provider"]["toardb"] = "provider.toardb_csa.ToarDBProvider"
