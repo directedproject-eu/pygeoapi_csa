@@ -16,7 +16,12 @@
 import inspect
 import os.path
 
-from quart import Quart, request, Request, send_from_directory
+config = os.getenv("PYGEOAPI_CONFIG", "./pygeoapi-config.yml")
+oiconfig = os.getenv("PYGEOAPI_OPENAPI", "./openapi-config-csa.yml")
+os.environ["PYGEOAPI_CONFIG"] = config
+os.environ["PYGEOAPI_OPENAPI"] = oiconfig
+
+from quart import Quart, request, Request, make_response, send_from_directory
 from pygeoapi import flask_app
 from pygeoapi.flask_app import API_RULES, CONFIG, api_, OPENAPI
 from quart_cors import cors
@@ -111,9 +116,7 @@ async def close_db():
 
 def run():
     ## Only used in local development - gunicorn is used for production
-    os.environ["PYGEOAPI_CONFIG"] = "pygeoapi-config.yml"
-    os.environ["PYGEOAPI_OPENAPI"] = "openapi-config-csa.yml"
-    APP.run(debug=False,
+    APP.run(debug=True,
             host=api_.config['server']['bind']['host'],
             port=api_.config['server']['bind']['port'])
 
