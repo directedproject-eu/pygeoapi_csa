@@ -66,6 +66,8 @@ APP.register_blueprint(oapip)
 APP.register_blueprint(coverage)
 APP.register_blueprint(collections)
 
+MODE = "production"
+
 
 @APP.route('/')
 async def landing_page():
@@ -96,8 +98,12 @@ async def init_db():
     """ Initialize peristent database/provider connections """
     if csapi_.provider_part1:
         await csapi_.provider_part1.open()
+        if MODE == "dev":
+            await csapi_.provider_part1.setup()
     if csapi_.provider_part2:
         await csapi_.provider_part2.open()
+        if MODE == "dev":
+            await csapi_.provider_part2.setup()
 
 
 @APP.after_serving
@@ -110,13 +116,19 @@ async def close_db():
 
 
 def run():
-    ## Only used in local development - gunicorn is used for production
+    for _ in range(5):
+        LOGGER.critical("!!! RUNNING IN DEV MODE !!! ")
+
+    ## Only used in local development - ASGI server is used for production
     os.environ["PYGEOAPI_CONFIG"] = "pygeoapi-config.yml"
     os.environ["PYGEOAPI_OPENAPI"] = "openapi-config-csa.yml"
+
+    """ Initialize peristent database/provider connections """
     APP.run(debug=False,
             host=api_.config['server']['bind']['host'],
             port=api_.config['server']['bind']['port'])
 
 
 if __name__ == "__main__":
+    MODE = "dev"
     run()

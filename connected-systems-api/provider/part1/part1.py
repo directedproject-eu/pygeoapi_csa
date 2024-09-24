@@ -17,12 +17,11 @@ import logging
 import uuid
 from datetime import datetime as DateTime
 
-
 import elasticsearch
 from elasticsearch_dsl import async_connections
 from pygeoapi.provider.base import ProviderGenericError, ProviderItemNotFoundError
 
-from ..connector_elastic import ElasticsearchConnector, ElasticSearchConfig, parse_csa_params, parse_spatial_params, \
+from ..elasticsearch import ElasticsearchConnector, ElasticSearchConfig, parse_csa_params, parse_spatial_params, \
     parse_datetime_params
 from ..definitions import *
 

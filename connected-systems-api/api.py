@@ -467,10 +467,9 @@ class CSAPI(CSMeta):
                 return headers, HTTPStatus.OK, orjson.dumps(response)
 
 
-PLUGINS["provider"]["toardb"] = "provider.toardb_csa.ToarDBProvider"
 PLUGINS["provider"]["ElasticSearchConnectedSystems"] = \
-    "provider.part1.elasticsearch.ConnectedSystemsESProvider"
+    "provider.part1.part1.ConnectedSystemsESProvider"
 PLUGINS["provider"]["TimescaleDBConnectedSystems"] = \
-    "provider.part2.timescaledb.ConnectedSystemsTimescaleDBProvider"
+    "provider.part2.part2.ConnectedSystemsTimescaleDBProvider"
 
 csapi_ = CSAPI(CONFIG, OPENAPI)

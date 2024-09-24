@@ -1,24 +1,24 @@
-import functools
+import json
 import json
 import logging
 import uuid
 from http import HTTPStatus
-from typing import List, Dict, Tuple
 
 import asyncpg
 import elasticsearch
 from asyncpg import Connection
-from elasticsearch import AsyncElasticsearch
-from elasticsearch_dsl import Search, AsyncSearch, async_connections, AsyncDocument, Keyword, AttrDict, Object
+from elasticsearch_dsl import async_connections
 from pygeoapi.provider.base import ProviderGenericError, ProviderItemNotFoundError
 
 from .formats.om_json_scalar import OMJsonSchemaParser
 from .util import TimescaleDbConfig, ObservationQuery, Observation
-from ..connector_elastic import ElasticsearchConnector, ElasticSearchConfig, parse_csa_params, \
+from ..elasticsearch import ElasticsearchConnector, ElasticSearchConfig, parse_csa_params, \
     parse_temporal_filters
 from ..definitions import *
 
 LOGGER = logging.getLogger(__name__)
+
+
 # LOGGER.setLevel('DEBUG')
 
 
@@ -119,6 +119,8 @@ class ConnectedSystemsTimescaleDBProvider(ConnectedSystemsPart2Provider, Elastic
             async with connection.transaction():
                 for stmnt in statements:
                     await connection.execute(stmnt)
+
+        await Datastream.init()
 
     def get_conformance(self) -> List[str]:
         """Returns the list of conformance classes that are implemented by this provider"""

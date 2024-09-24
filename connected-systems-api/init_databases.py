@@ -1,4 +1,3 @@
-from pygeoapi.flask_app import CONFIG, OPENAPI
 from api import *
 
 PLUGINS["provider"]["ElasticSearchConnectedSystems"] = \
