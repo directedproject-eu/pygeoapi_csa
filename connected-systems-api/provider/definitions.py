@@ -18,12 +18,12 @@ import urllib.parse
 from dataclasses import dataclass
 from enum import Enum, auto
 from typing import List, Optional, Dict, Tuple, TypeAlias
-from datetime import datetime
+from datetime import datetime as DateTime
 
 from elasticsearch_dsl import AsyncDocument, Keyword, GeoShape, DateRange, InnerDoc
 from pygeoapi.provider.base import ProviderInvalidQueryError
 
-TimeInterval: TypeAlias = Tuple[Optional[datetime], Optional[datetime]]
+TimeInterval: TypeAlias = Tuple[Optional[DateTime], Optional[DateTime]]
 CSAGetResponse: TypeAlias = Tuple[List[Dict], List[Dict]] | None
 CSACrudResponse: TypeAlias = str | List[str]
 
@@ -415,9 +415,9 @@ def parse_query_parameters(out_parameters: CSAParams, input_parameters: Dict, ur
         else:
             # TODO: check if more edge cases/predefined variables exist
             if val == "now":
-                date = datetime.utcnow()
+                date = DateTime.now()
             else:
-                date = datetime.fromisoformat(val)
+                date = DateTime.fromisoformat(val)
             setattr(out_parameters, key, (date, date))
 
     def _parse_bbox(key):
@@ -448,7 +448,7 @@ def parse_query_parameters(out_parameters: CSAParams, input_parameters: Dict, ur
         raw = input_parameters.get(key)
         setattr(out_parameters, key, raw)
         # TODO: Support 'latest' qualifier
-        now = datetime.utcnow()
+        now = DateTime.now()
         start, end = None, None
         if "/" in raw:
             # time interval
@@ -460,19 +460,19 @@ def parse_query_parameters(out_parameters: CSAParams, input_parameters: Dict, ur
             elif startts == "..":
                 start = None
             else:
-                start = datetime.fromisoformat(startts)
+                start = DateTime.fromisoformat(startts)
             if endts == "now":
                 end = now
             elif endts == "..":
                 end = None
             else:
-                end = datetime.fromisoformat(endts)
+                end = DateTime.fromisoformat(endts)
         else:
             if raw == "now":
                 start = now
                 end = now
             else:
-                ts = datetime.fromisoformat(raw)
+                ts = DateTime.fromisoformat(raw)
                 start = ts
                 end = ts
         setattr(out_parameters, "_" + key, (start, end))

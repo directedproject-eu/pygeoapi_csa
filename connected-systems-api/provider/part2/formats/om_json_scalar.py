@@ -1,7 +1,7 @@
 import json
 import struct
 import uuid
-from datetime import datetime
+from datetime import datetime as DateTime
 
 import asyncpg
 
@@ -59,7 +59,7 @@ class OMJsonSchemaParser(SchemaParser):
     def decode(self, data: any) -> Observation:
         return Observation(
             datastream_id=data["datastream"],
-            resultTime=datetime.fromisoformat(data["resultTime"]),
+            resultTime=DateTime.fromisoformat(data["resultTime"]),
             result=struct.pack("!f", data["result"]),
         )
 
