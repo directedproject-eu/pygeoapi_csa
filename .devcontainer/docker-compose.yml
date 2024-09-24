@@ -22,25 +22,25 @@ networks:
 
 
 services:
-  connected-systems-api:
-    image: docker.52north.org/sensor-web/cs-api:latest
-    build:
-      context: ../
-      target: hybrid
-    volumes:
-      - ../connected-systems-api/:/app/connected-systems-api/
-      - ./connected-systems-api/openapi-config-csa.yml:/app/connected-systems-api/openapi-config-csa.yml
-      - ./connected-systems-api/pygeoapi-config.yml:/app/connected-systems-api/pygeoapi-config.yml
-      - ./data/:/srv/data/
-      - ./_vscode/:/app/.vscode
-    ports:
-      - 5000:5000
-    depends_on:
-      es01:
-        condition: service_healthy
-      timescaledb:
-        condition: service_healthy
-    command: sleep infinity
+  # connected-systems-api:
+  #   image: docker.52north.org/sensor-web/cs-api:latest
+  #   build:
+  #     context: ../
+  #     target: hybrid
+  #   volumes:
+  #     - ../connected-systems-api/:/app/connected-systems-api/
+  #     - ./connected-systems-api/openapi-config-csa.yml:/app/connected-systems-api/openapi-config-csa.yml
+  #     - ./connected-systems-api/pygeoapi-config.yml:/app/connected-systems-api/pygeoapi-config.yml
+  #     - ./data/:/srv/data/
+  #     - ./_vscode/:/app/.vscode
+  #   ports:
+  #     - 5000:5000
+  #   depends_on:
+  #     es01:
+  #       condition: service_healthy
+  #     timescaledb:
+  #       condition: service_healthy
+  #   command: sleep infinity
 
   timescaledb:
     image: timescale/timescaledb-ha:pg16
