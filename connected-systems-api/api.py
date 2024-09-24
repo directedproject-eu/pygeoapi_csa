@@ -349,7 +349,6 @@ class CSAPI(CSMeta):
         # must be turned off when PATCHing
         # may be turned off for increased performance
         if shall_validate:
-            schema = self.csa_schemas[collection]
             try:
                 self.validator.validate(collection, entity)
             except jsonschema.exceptions.ValidationError as ex:
