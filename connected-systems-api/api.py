@@ -18,25 +18,63 @@ import pathlib
 from http import HTTPMethod
 
 import jsonschema
-from jsonschema import validate
+import orjson
+from jsonschema.protocols import Validator
+from jsonschema.validators import Draft7Validator
 from pygeoapi.api import *
 from pygeoapi.flask_app import CONFIG, OPENAPI
 from pygeoapi.provider.base import ProviderItemNotFoundError
-from pygeoapi.util import render_j2_template, to_json
+from pygeoapi.util import render_j2_template
 
 from meta import CSMeta
 from provider.definitions import *
 from util import *
 
 
-package_dir = pathlib.Path(__file__).parent
+class SchemaValidator:
+    system_validator: Validator
+    deployment_validator: Validator
+    procedure_validator: Validator
+    feature_validator: Validator
+    property_validator: Validator
+    datastream_validator: Validator
+    observation_validator: Validator
+
+    def __init__(self):
+        package_dir = pathlib.Path(__file__).parent
+        for prop, loc in [("system_validator", "schemas/connected-systems/system.schema"),
+                          ("procedure_validator", "schemas/connected-systems/procedure.schema"),
+                          ("property_validator", "schemas/connected-systems/property.schema"),
+                          ("feature_validator", "schemas/connected-systems/samplingFeature.schema"),
+                          ("deployment_validator", "schemas/connected-systems/deployment.schema"),
+                          ("datastream_validator", "schemas/connected-systems/datastream.schema"),
+                          ("observation_validator", "schemas/connected-systems/observation.schema")]:
+            with open(os.path.join(package_dir, loc), 'r') as definition:
+                setattr(self, prop, Draft7Validator(json.load(definition)))
+
+    def validate(self, collection: EntityType, instance: any) -> None:
+        match collection:
+            case EntityType.SYSTEMS:
+                return self.system_validator.validate(instance)
+            case EntityType.DEPLOYMENTS:
+                return self.deployment_validator.validate(instance)
+            case EntityType.PROCEDURES:
+                return self.procedure_validator.validate(instance)
+            case EntityType.SAMPLING_FEATURES:
+                return self.feature_validator.validate(instance)
+            case EntityType.PROPERTIES:
+                return self.property_validator.validate(instance)
+            case EntityType.DATASTREAMS:
+                return self.datastream_validator.validate(instance)
+            case EntityType.OBSERVATIONS:
+                return self.observation_validator.validate(instance)
 
 
 class CSAPI(CSMeta):
     """
         API Object implementing OGC API Connected Systems
     """
-    csa_schemas = {}
+    validator = SchemaValidator()
     strict_validation = True
 
     def __init__(self, config, openapi):
@@ -55,17 +93,7 @@ class CSAPI(CSMeta):
                 if self.config.get('resources') is None:
                     self.config['resources'] = {}
 
-                # TODO: refresh this upon modification of the datastore (e.g. adding new collections)
-                for name, location in [(EntityType.SYSTEMS, "schemas/connected-systems/system.schema"),
-                                       (EntityType.PROCEDURES, "schemas/connected-systems/procedure.schema"),
-                                       (EntityType.PROPERTIES, "schemas/connected-systems/property.schema"),
-                                       (EntityType.SAMPLING_FEATURES,
-                                        "schemas/connected-systems/samplingFeature.schema"),
-                                       (EntityType.DEPLOYMENTS, "schemas/connected-systems/deployment.schema")]:
-                    with open(os.path.join(package_dir, location), 'r') as definition:
-                        self.csa_schemas[name] = json.load(definition)
             api_part2 = config['dynamic-resources'].get('connected-systems-api-part2', None)
-
             if api_part2 is not None:
                 provider_definition = api_part2['provider']
                 provider_definition["base_url"] = self.base_url
@@ -73,12 +101,6 @@ class CSAPI(CSMeta):
 
                 if self.config.get('resources') is None:
                     self.config['resources'] = {}
-
-                for name, location in [
-                    (EntityType.DATASTREAMS, "schemas/connected-systems/datastream.schema"),
-                    (EntityType.OBSERVATIONS, "schemas/connected-systems/observation.schema")]:
-                    with open(os.path.join(package_dir, location), 'r') as definition:
-                        self.csa_schemas[name] = json.load(definition)
 
     @parse_request
     @jsonldify
@@ -314,22 +336,32 @@ class CSAPI(CSMeta):
             provider = self.provider_part1
 
         headers = request.get_response_headers(**self.api_headers)
-        entity = json.loads(request.data)
-
-        # Validate against json schema if required
+        try:
+            entity = orjson.loads(request.data)
+        except json.decoder.JSONDecodeError as ex:
+            return self.get_exception(
+                HTTPStatus.BAD_REQUEST,
+                headers,
+                request.format,
+                'InvalidParameterValue',
+                ex.args)
+        # Validate against json schema if possible+required
+        # must be turned off when PATCHing
         # may be turned off for increased performance
         if shall_validate:
             schema = self.csa_schemas[collection]
             try:
-                validate(instance=entity, schema=schema)
-
+                self.validator.validate(collection, entity)
             except jsonschema.exceptions.ValidationError as ex:
                 return self.get_exception(
                     HTTPStatus.BAD_REQUEST,
                     headers,
                     request.format,
                     'InvalidParameterValue',
-                    ex.message)
+                    {
+                        "message": ex.message,
+                        "context": [e.message for e in ex.context]
+                    })
         # remove additional fields that cannot be set using POST/PUT but only through Path but pass validation
         if "parent" in entity:
             return self.get_exception(
