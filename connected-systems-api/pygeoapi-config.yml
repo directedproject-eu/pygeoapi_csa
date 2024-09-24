@@ -69,7 +69,7 @@ dynamic-resources:
     type: connected-systems
     title: "elasticsearch-csa-adapter"
     description: "Adapter to Elasticsearch CSA-Part1 Backend"
-    strict_validation: False
+    strict_validation: True
     keywords: [ ]
     provider:
       type: elastic-csa-adapter

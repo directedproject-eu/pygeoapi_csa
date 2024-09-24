@@ -17,7 +17,9 @@
 // requires  @hyperjump/json-schema
 // npm install @hyperjump/json-schema
 
-import { addMediaTypePlugin, addSchema, validate } from "@hyperjump/json-schema/draft-07";
+import { registerSchema, validate } from "@hyperjump/json-schema/draft-07";
+import { addMediaTypePlugin } from "@hyperjump/browser";
+import { buildSchemaDocument } from "@hyperjump/json-schema/experimental";
 import { bundle } from "@hyperjump/json-schema/bundle";
 import { readdirSync, readFileSync, writeFile } from "fs";
 
@@ -26,8 +28,12 @@ const baseUrl = "https://opengeospatial.github.io/ogcapi-connected-systems/"
 let datastream_schema = {}
 
 addMediaTypePlugin("application/json", {
-    parse: async (response) => [JSON.parse(await response.text()), undefined],
-    matcher: (path) => path.endsWith(".json")
+    parse: async (response) => {
+        //return [JSON.parse(await response.text()),]
+        const schema = await response.json()
+        return buildSchemaDocument(schema, response.url)
+    },
+    fileMatcher: (path) => path.endsWith(".json")
 });
 
 function parse_directory(name) {
@@ -79,12 +85,13 @@ function parse_directory(name) {
 
             const suite = JSON.parse(schemaText);
             suite["$id"] = baseUrl + name + "/" + entry.name;
+            suite["$schema"] ??= "http://json-schema.org/draft-07/schema"
 
             if (entry.name.includes("DataStream")) {
                 datastream_schema = suite
             }
             // console.log(`registered schema: ${suite["$id"]}`)
-            addSchema(suite)
+            registerSchema(suite)
         });
 }
 
