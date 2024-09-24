@@ -9,6 +9,6 @@
         "test": "node tester.js"
     },
     "dependencies": {
-        "@hyperjump/json-schema": "^1.6.5"
+        "@hyperjump/json-schema": "^1.9.8"
     }
 }
