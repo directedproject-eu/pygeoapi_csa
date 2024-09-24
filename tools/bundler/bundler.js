@@ -23,7 +23,7 @@ import { buildSchemaDocument } from "@hyperjump/json-schema/experimental";
 import { bundle } from "@hyperjump/json-schema/bundle";
 import { readdirSync, readFileSync, writeFile } from "fs";
 
-const baseUrl = "https://opengeospatial.github.io/ogcapi-connected-systems/"
+const baseUrl = "https://connected-systems.n52/"
 
 let datastream_schema = {}
 
@@ -37,10 +37,11 @@ addMediaTypePlugin("application/json", {
 });
 
 function parse_directory(name) {
-    readdirSync(`${name}`, { withFileTypes: true })
+    const directory = "ogcapi-connected-systems/" + name
+    readdirSync(directory, { withFileTypes: true })
         .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
         .forEach((entry) => {
-            const file = `${name}/${entry.name}`;
+            const file = `${directory}/${entry.name}`;
             let schemaText = readFileSync(file, "utf8")
             const re = /\$ref":\s?"([^"]+)"/g
             let refs = schemaText.matchAll(re)
@@ -58,7 +59,8 @@ function parse_directory(name) {
                     replacement = new URL(ref, baseUrl + name + "/").href
                 } else if (ref.startsWith("sensormlDefs.json#/definitions/")) {
                     // special case because defs-collector class is optimized out during bundling
-                    replacement =  baseUrl + "sensorml/schemas/json/" + ref.substring(31) + ".json"
+                    replacement = baseUrl + "sensorml/schemas/json/" + ref.substring(31) + ".json"
+                    // console.log("REPLACING " + ref + " with " + replacement)
                 } else if (ref.startsWith("commonDefs.json#/definitions/")) {
                     // special case because defs-collector class is optimized out during bundling
                     if (name.startsWith("sensorml")) {
@@ -74,13 +76,16 @@ function parse_directory(name) {
                 }
                 schemaText = schemaText.replace(match[0], `$ref":"${replacement}"`)
 
+                
                 /*
-                console.log(name)
-                console.log(match[0])
-                console.log(replacement)
-                console.log()
-                console.log()
+                if (entry.name.startsWith("system.json")) {
+                    console.log(file)
+                    console.log(match[0])
+                    console.log(replacement)
+                    console.log(schemaText)
+                }
                 */
+
             }
 
             const suite = JSON.parse(schemaText);
@@ -90,14 +95,14 @@ function parse_directory(name) {
             if (entry.name.includes("DataStream")) {
                 datastream_schema = suite
             }
-            // console.log(`registered schema: ${suite["$id"]}`)
+            console.log(`registered schema: ${suite["$id"]}`)
             registerSchema(suite)
         });
 }
 
 async function get_bundle(uri, fileName) {
     const bundledSchema = await bundle(uri, {
-        //bundleMode: 'full',
+        // bundleMode: 'full',
         //externalSchemas: ["https://geojson.org/schema/"]
     });
 
@@ -111,14 +116,14 @@ async function get_bundle(uri, fileName) {
     });
 }
 
-var base = 'ogcapi-connected-systems/'
-parse_directory(base + 'common')
-parse_directory(base + 'sensorml/schemas/json')
-parse_directory(base + 'swecommon/schemas/json')
-parse_directory(base + 'api/part1/openapi/schemas/common')
-parse_directory(base + 'api/part1/openapi/schemas/sensorml')
-parse_directory(base + 'api/part2/openapi/schemas/common')
-parse_directory(base + 'api/part2/openapi/schemas/json')
+parse_directory('common')
+parse_directory('sensorml/schemas/json')
+parse_directory('swecommon/schemas/json')
+parse_directory('api/part1/openapi/schemas/common')
+parse_directory('api/part1/openapi/schemas/sensorml')
+parse_directory('api/part1/openapi/schemas/geojson')
+parse_directory('api/part2/openapi/schemas/common')
+parse_directory('api/part2/openapi/schemas/json')
 
 await (get_bundle(baseUrl + 'api/part1/openapi/schemas/sensorml/system.json', "bundles/system.schema"))
 await (get_bundle(baseUrl + 'api/part1/openapi/schemas/sensorml/deployment.json', "bundles/deployment.schema"))
