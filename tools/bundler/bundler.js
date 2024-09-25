@@ -45,15 +45,21 @@ function parse_directory(name) {
             let schemaText = readFileSync(file, "utf8")
             const re = /\$ref":\s?"([^"]+)"/g
             let refs = schemaText.matchAll(re)
-
+            
             // Make all $ref links absolute
             for (const match of refs) {
                 let ref = match[1]
-
                 let replacement = ref
                 // normalize $ref to use absolute urls
                 if (ref.startsWith("#") || ref.startsWith("http")) {
                     // same document - nothing to do
+                } else if (ref.startsWith("../common/commonDefs.json#/definitions/")) {
+                    // sibling directory
+                    if (ref.includes("definitions/Links")) {
+                        replacement = "https://connected-systems.n52/api/part1/openapi/schemas/common/links.json"
+                    } else {
+                        replacement = baseUrl + "common/" + ref.substring(39, 40).toLowerCase() + ref.substring(40) + ".json"
+                    }
                 } else if (ref.startsWith(".")) {
                     // higher level
                     replacement = new URL(ref, baseUrl + name + "/").href
