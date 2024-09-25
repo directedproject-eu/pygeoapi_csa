@@ -1,5 +1,7 @@
 FROM python:3.12-alpine AS base
 
+ARG VERSION 0.1
+
 LABEL maintainer="Jan Speckamp <j.speckamp@52north.org>" \
       org.opencontainers.image.authors="Jan Speckamp <j.speckamp@52north.org>" \
       org.opencontainers.image.url="https://github.com/52North/connected-systems-pygeoapi" \
