@@ -35,6 +35,12 @@ LOGGER.setLevel(level='INFO')
 class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchConnector):
 
     def __init__(self, provider_def: Dict):
+        """
+        * environment variables superseed provider_def
+        * provider_def is default fallback
+        * LIMITATION: uses the same environment variables like ../part2/timescaledb.py
+          for its elastic search provider
+        """
         super().__init__(provider_def)
         self._es_config = ElasticSearchConfig(
             connector_alias=es_conn_part1,

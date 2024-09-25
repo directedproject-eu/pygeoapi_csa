@@ -55,14 +55,19 @@ class ConnectedSystemsTimescaleDBProvider(ConnectedSystemsPart2Provider, Elastic
     _cache: Cache = Cache()
 
     def __init__(self, provider_def):
+        """
+        * environment variables superseed provider_def
+        * provider_def is default fallback
+        * LIMITATION: elastic search config uses the same environment variables like ../part1/elasticsearch.py
+        """
         super().__init__(provider_def)
         self.base_url = provider_def["base_url"]
         self._ts_config = TimescaleDbConfig(
-            hostname=provider_def["timescale"]["host"],
-            port=provider_def["timescale"]["port"],
-            user=provider_def["timescale"]["user"],
-            password=provider_def["timescale"]["password"],
-            dbname=provider_def["timescale"]["dbname"],
+            hostname=os.getenv('TIMESCALEDB_HOST', provider_def["timescale"]["host"]),
+            port=int(os.getenv('TIMESCALEDB_PORT', provider_def["timescale"]["port"])),
+            user=os.getenv('TIMESCALEDB_USER', provider_def["timescale"]["user"]),
+            password=os.getenv('TIMESCALEDB_PASSWORD', provider_def["timescale"]["password"]),
+            dbname=os.getenv('TIMESCALEDB_DB', provider_def["timescale"]["dbname"]),
         )
 
         self._es_config = ElasticSearchConfig(
