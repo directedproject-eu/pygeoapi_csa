@@ -62,6 +62,32 @@ You can limit the amount of observations (`num_of_obs_to_insert`) being inserted
 
 The API is accessible at `<host>:5000` and provides a HTML landing page for easy navigation.
 
+### Configuration
+
+The default configuration is done by the two configuration files:
+
+* `openapi-config-csa.yml`
+* `pygeoapi-config.yml`
+
+The providers implementing part 1 and 2 of the specification are currently using [timescaledb]() and [elastic search]().
+The configuration of these backend services can be achieved by providing the according values in the `pygeoapi-config.yml` or via environment variables as outlined in the following list.
+The values provided via environment variables superseed the `pygeoapi-config.yml` values.
+The current implementation allows only the use of **one** elastic search cluster, when providing the configuration via environment variables.
+
+* **Elastic Search Cluster**
+  * `ELASTIC_HOST`
+  * `ELASTIC_PORT`
+  * `ELASTIC_DB`
+  * `ELASTIC_USER`
+  * `ELASTIC_PASSWORD`
+
+* **TimescaleDB**
+  * `TIMESCALEDB_HOST`
+  * `TIMESCALEDB_PORT`
+  * `TIMESCALEDB_DB`
+  * `TIMESCALEDB_USER`
+  * `TIMESCALEDB_PASSWORD`
+
 ## License
 
 The software is licensed under the `Apache 2.0 License`. See [LICENSE.md](LICENSE.md) for details.

@@ -16,6 +16,7 @@
 import logging
 import uuid
 from datetime import datetime as DateTime
+import os
 
 
 import elasticsearch
@@ -36,13 +37,19 @@ LOGGER = logging.getLogger(__name__)
 class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchConnector):
 
     def __init__(self, provider_def: Dict):
+        """
+        * environment variables superseed provider_def
+        * provider_def is default fallback
+        * LIMITATION: uses the same environment variables like ../part2/timescaledb.py
+          for its elastic search provider
+        """
         super().__init__(provider_def)
         self._es_config = ElasticSearchConfig(
-            hostname=provider_def['host'],
-            port=int(provider_def['port']),
-            dbname=provider_def['dbname'],
-            user=provider_def['user'],
-            password=provider_def['password']
+            hostname=os.getenv('ELASTIC_HOST', provider_def['host']),
+            port=int(os.getenv('ELASTIC_PORT', provider_def['port'])),
+            dbname=os.getenv('ELASTIC_DB', provider_def['dbname']),
+            user=os.gentenv('ELASTIC_USER', provider_def['user']),
+            password=os.getenv('ELASTIC_PASSWORD', provider_def['password'])
         )
 
     def get_conformance(self) -> List[str]:
