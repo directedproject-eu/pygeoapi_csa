@@ -82,7 +82,7 @@ async def assets(filename):
 
 
 @APP.route('/openapi')
-def openapi():
+async def openapi():
     request.collection = None
     return flask_app.openapi()
 

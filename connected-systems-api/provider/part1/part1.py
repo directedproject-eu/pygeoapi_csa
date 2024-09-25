@@ -16,6 +16,7 @@
 import logging
 import uuid
 from datetime import datetime as DateTime
+from typing import Callable, Awaitable, Coroutine
 
 import elasticsearch
 from elasticsearch_dsl import async_connections
@@ -252,9 +253,9 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchCon
         query = parse_spatial_params(query, parameters)
 
         if parameters.system is not None:
-            query = query.filter("terms", system=parameters.system)
+            query = query.filter("terms", system_ids=parameters.system)
 
-        return await self.search(query, parameters)
+        return await self.search(query, parameters, ["system_ids"])
 
     async def query_procedures(self, parameters: ProceduresParams) -> CSAGetResponse:
         query = Procedure.search()
@@ -290,18 +291,40 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchCon
         return await self.search(query, parameters)
 
     async def create(self, type: EntityType, item: Dict) -> CSACrudResponse:
+        pre_hook: Optional[Callable[[AsyncDocument], Awaitable[None]]] = None
+        post_hook: Optional[Callable[[AsyncDocument], Awaitable[None]]] = None
 
         # Special Handling for some fields
         match type:
             case EntityType.SYSTEMS:
                 # parse date_range fields to es-compatible format
-                self._format_date_range("validTime", item)
-                parent_id = item.get("parent", None)
-                if parent_id and not await System().exists(id=parent_id):
-                    # check that parent exists,
-                    raise ProviderInvalidQueryError(user_msg=f"cannot find parent system with id: {parent_id}")
+                async def check_parent(entity: AsyncDocument) -> None:
+                    self._format_date_range("validTime", entity)
+                    parent_id = getattr(entity, "parent", None)
+                    if parent_id and not await System().exists(id=parent_id):
+                        # check that parent exists,
+                        raise ProviderInvalidQueryError(user_msg=f"cannot find parent system with id: {parent_id}")
+                    return None
+
+                pre_hook = check_parent
                 entity = System(**item)
             case EntityType.DEPLOYMENTS:
+                # parse deployedSystems and possibly link if it is local system identified by urn
+                async def link_system(entity: AsyncDocument) -> None:
+                    entity.system_ids = []
+                    for system in getattr(entity, "deployedSystems", []):
+                        href: str = system["system"]["href"]
+                        if href.startswith("urn"):
+                            query = System().search()
+                            query = query.filter("term", uniqueId=href)
+                            found = await query.source(includes=["_id"]).execute()
+                            if len(found.hits) != 1:
+                                raise ProviderInvalidQueryError(
+                                    user_msg=f"cannot find local system with urn: {href}")
+                            else:
+                                entity.system_ids.append(found.hits.hits[0]._id)
+
+                pre_hook = link_system
                 entity = Deployment(**item)
             case EntityType.PROCEDURES:
                 entity = Procedure(**item)
@@ -312,20 +335,19 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchCon
             case _:
                 raise ProviderInvalidQueryError(user_msg=f"unrecognized type {type}")
 
-        if "id" not in item:
-            # We may have to generate id as it is not always required
-            identifier = str(uuid.uuid4())
-            entity.id = identifier
-        else:
-            identifier = item["id"]
-            entity.id = identifier
+        # We may have to generate id as it is not always required
+        identifier = item["id"] if ("id" in item) else str(uuid.uuid4())
+        entity.id = identifier
+        entity.meta.id = identifier
 
         try:
+            if pre_hook:
+                await pre_hook(entity)
             entity.meta.id = identifier
-            if await entity.save():
-                return identifier
-            else:
-                raise Exception("cannot save identifier!")
+            await entity.save()
+            if post_hook:
+                await post_hook(entity)
+            return identifier
         except Exception as e:
             raise ProviderInvalidQueryError(user_msg=str(e))
 
@@ -439,9 +461,9 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchCon
         except Exception as e:
             raise ProviderItemNotFoundError(user_msg=f"cannot find {type} with id: {identifier}! {e}")
 
-    def _format_date_range(self, key: str, item: Dict) -> None:
-        if item.get(key):
-            time = item.get(key)
+    def _format_date_range(self, key: str, item: AsyncDocument) -> None:
+        if hasattr(item, key):
+            time = getattr(item, key)
             now = DateTime.now()
             if time[0] == "now":
                 start = now

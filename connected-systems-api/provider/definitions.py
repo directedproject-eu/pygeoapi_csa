@@ -195,7 +195,7 @@ class Characteristics(InnerDoc):
 class System(AsyncDocument):
     id: str = Keyword()
     position = GeoShape()
-    validTime_parsed = DateRange()
+    validTime_parsed = DateRange()  # Internal field
     parent = Keyword()
     procedure = Keyword()
     poi = Keyword()
@@ -210,6 +210,7 @@ class System(AsyncDocument):
 
 class Deployment(AsyncDocument):
     id: str = Keyword()
+    system_ids = Keyword()  # Internal field
 
     class Index:
         name = "deployments"
@@ -224,6 +225,7 @@ class Procedure(AsyncDocument):
 
 class SamplingFeature(AsyncDocument):
     id: str = Keyword()
+    system_ids = Keyword()  # Internal field
 
     class Index:
         name = "sampling_features"

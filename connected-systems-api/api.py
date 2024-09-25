@@ -385,7 +385,8 @@ class CSAPI(CSMeta):
                 case _:
                     raise Exception(f"unrecognized HTTMethod {method}")
 
-            return headers, HTTPStatus.OK, orjson.dumps(await response)
+            result = await response
+            return headers, HTTPStatus.CREATED, orjson.dumps(result)
         except Exception as ex:
             return self.get_exception(
                 HTTPStatus.BAD_REQUEST,
