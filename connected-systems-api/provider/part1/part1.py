@@ -291,14 +291,20 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchCon
         return await self.search(query, parameters)
 
     async def create(self, type: EntityType, item: Dict) -> CSACrudResponse:
-        pre_hook: Optional[Callable[[AsyncDocument], Awaitable[None]]] = None
-        post_hook: Optional[Callable[[AsyncDocument], Awaitable[None]]] = None
+
+        async def duplicate_identifier(item: Dict, entity: AsyncDocument) -> None:
+            if "id" in item:
+                if await entity.exists(id=entity.id):
+                    raise ProviderInvalidQueryError(user_msg=f"entity with id {entity.id} already exists!")
+
+        pre_hook: List[Callable[[Dict, AsyncDocument], Awaitable[None]]] = [duplicate_identifier]
+        post_hook: List[Callable[[Dict, AsyncDocument], Awaitable[None]]] = []
 
         # Special Handling for some fields
         match type:
             case EntityType.SYSTEMS:
                 # parse date_range fields to es-compatible format
-                async def check_parent(entity: AsyncDocument) -> None:
+                async def check_parent(_: Dict, entity: AsyncDocument) -> None:
                     self._format_date_range("validTime", entity)
                     parent_id = getattr(entity, "parent", None)
                     if parent_id and not await System().exists(id=parent_id):
@@ -306,11 +312,11 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchCon
                         raise ProviderInvalidQueryError(user_msg=f"cannot find parent system with id: {parent_id}")
                     return None
 
-                pre_hook = check_parent
+                pre_hook.append(check_parent)
                 entity = System(**item)
             case EntityType.DEPLOYMENTS:
                 # parse deployedSystems and possibly link if it is local system identified by urn
-                async def link_system(entity: AsyncDocument) -> None:
+                async def link_system(_: Dict, entity: AsyncDocument) -> None:
                     entity.system_ids = []
                     for system in getattr(entity, "deployedSystems", []):
                         href: str = system["system"]["href"]
@@ -324,7 +330,7 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchCon
                             else:
                                 entity.system_ids.append(found.hits.hits[0]._id)
 
-                pre_hook = link_system
+                post_hook.append(link_system)
                 entity = Deployment(**item)
             case EntityType.PROCEDURES:
                 entity = Procedure(**item)
@@ -341,12 +347,12 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchCon
         entity.meta.id = identifier
 
         try:
-            if pre_hook:
-                await pre_hook(entity)
+            for hook in pre_hook:
+                await hook(item, entity)
             entity.meta.id = identifier
             await entity.save()
-            if post_hook:
-                await post_hook(entity)
+            for hook in post_hook:
+                await hook(item, entity)
             return identifier
         except Exception as e:
             raise ProviderInvalidQueryError(user_msg=str(e))
