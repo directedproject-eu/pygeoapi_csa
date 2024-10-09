@@ -14,9 +14,9 @@ LABEL maintainer="Jan Speckamp <j.speckamp@52north.org>" \
 
 
 # alpine is confused where to look for python libraries so we need to support it here
-ENV PYTHONPATH /usr/lib/python3.12/site-packages
-ENV PROJ_DIR /usr
-ENV PYTHONUNBUFFERED 1
+ENV PYTHONPATH=/usr/lib/python3.12/site-packages
+ENV PROJ_DIR=/usr
+ENV PYTHONUNBUFFERED=1
 
 RUN apk update
 RUN apk add gcc musl-dev git proj proj-dev proj-util geos geos-dev py3-numpy py3-shapely py3-shapely-pyc
@@ -35,8 +35,8 @@ COPY docker/examples/hybrid-csa/openapi-config-csa.yml ./connected-systems-api/
 COPY docker/examples/hybrid-csa/pygeoapi-config.yml ./connected-systems-api/
 COPY hypercorn.conf.py .
 
-ENV PYGEOAPI_CONFIG /app/connected-systems-api/pygeoapi-config.yml
-ENV PYGEOAPI_OPENAPI /app/connected-systems-api/openapi-config-csa.yml
+ENV PYGEOAPI_CONFIG=/app/connected-systems-api/pygeoapi-config.yml
+ENV PYGEOAPI_OPENAPI=/app/connected-systems-api/openapi-config-csa.yml
 
 WORKDIR /app/connected-systems-api
 CMD ["sh", "-c", "python setup.py && hypercorn -c ../hypercorn.conf.py app:APP"]
