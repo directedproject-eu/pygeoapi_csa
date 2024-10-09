@@ -12,7 +12,7 @@ LABEL maintainer="Jan Speckamp <j.speckamp@52north.org>" \
 
 
 # alpine is confused where to look for python libraries so we need to support it here
-ENV PYTHONPATH /usr/lib/python3.12/site-packages
+ENV PYTHONPATH=/usr/lib/python3.12/site-packages
 ENV PROJ_DIR=/usr
 ENV PYTHONUNBUFFERED=1
 
