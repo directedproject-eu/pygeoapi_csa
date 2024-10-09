@@ -14,10 +14,10 @@ Build appropriate docker container (choose either target)
 docker compose build connected-systems-api
 ```
 
-Note: When building manually make sure to specify the `target` as either `elasticsearch` or `toardb`.
+Note: When building manually make sure to specify the `target` as either `hybrid` or `toardb`.
 
 ```commandline
-docker build --target=<elasticsearch|toardb> .
+docker build --target=<hybrid|toardb> .
 ```
 
 ### Local/Development Installation
