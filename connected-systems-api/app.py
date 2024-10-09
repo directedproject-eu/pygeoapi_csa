@@ -115,7 +115,7 @@ async def close_db():
 
 
 def run():
-    ## Only used in local development - gunicorn is used for production
+    ## Only used in local development - hypercorn is used for production
     APP.run(debug=True,
             host=api_.config['server']['bind']['host'],
             port=api_.config['server']['bind']['port'])
