@@ -4,19 +4,6 @@ Proof of Concept of the OGC Connected Systems API based on pygeoapi
 
 ## Installation
 
-### Docker
-Example Setups for each backend are provided in the respective subfolder in the `docker` subdirectory.
-
-Build appropriate docker container (choose either target)
-```commandline
-docker compose build connected-systems-api
-```
-
-Note: When building manually make sure to specify the `target` as either `elasticsearch` or `toardb`.
-```commandline
-docker build --target=<elasticsearch|toardb> .
-```
-
 ### Local/Development Installation
 
 The specific installation instructions depend on the actual backend to be used, as each backend may require additional dependencies.
@@ -33,11 +20,27 @@ pip install -r requirements_toardb_csa.txt
 pip install -r requirements_elasticsearch_csa.txt
 ```
 
-The application can then be started via
+If additional providers are used, e.g. for serving a `STAC` interface in parallel to Connected-Systems, additional 
+dependencies may be necessary depending on the used underlying provider.
+
+The application can then be started from the root directory via
 ```commandline
-PYGEOAPI_CONFIG=<path-to-pygeoapi-config.yml> \
-PYGEOAPI_OPENAPI=<path-to-openapi-config-csa.yml> \
-python3 connected-systems-api/flask_app.py
+PYGEOAPI_CONFIG=docker/examples/hybrid-csa/pygeoapi-config.yml \
+PYGEOAPI_OPENAPI=docker/examples/hybrid-csa/openapi-config-csa.yml \
+python3 connected-systems-api/app.py 
+```
+
+### Docker
+Example Setups for each backend are provided in the respective subfolder in the `docker` subdirectory.
+
+Build appropriate docker container (choose either target)
+```commandline
+docker compose build connected-systems-api
+```
+
+Note: When building manually make sure to specify the `target` as either `elasticsearch` or `toardb`.
+```commandline
+docker build --target=<elasticsearch|toardb> .
 ```
 
 # Usage
