@@ -5,12 +5,6 @@ volumes:
     driver: local
   kibanadata:
     driver: local
-  metricbeatdata01:
-    driver: local
-  filebeatdata01:
-    driver: local
-  logstashdata01:
-    driver: local
   postgresdata:
     driver: local
 
@@ -27,6 +21,17 @@ services:
     build:
       context: ../
       target: hybrid
+    environment:
+      - TIMESCALEDB_HOST=timescaledb
+      - TIMESCALEDB_PORT=5432
+      - TIMESCALEDB_DB=csa
+      - TIMESCALEDB_USER=timescaledb
+      - TIMESCALEDB_PASSWORD=password
+      - ELASTIC_HOST=es01
+      - ELASTIC_PORT=9200
+      - ELASTIC_DB=csa
+      - ELASTIC_USER=elastic
+      - ELASTIC_PASSWORD=password
     volumes:
       - ../connected-systems-api/:/app/connected-systems-api/
       - ./connected-systems-api/openapi-config-csa.yml:/app/connected-systems-api/openapi-config-csa.yml
