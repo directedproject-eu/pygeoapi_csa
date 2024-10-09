@@ -48,7 +48,7 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchCon
             hostname=os.getenv('ELASTIC_HOST', provider_def['host']),
             port=int(os.getenv('ELASTIC_PORT', provider_def['port'])),
             dbname=os.getenv('ELASTIC_DB', provider_def['dbname']),
-            user=os.gentenv('ELASTIC_USER', provider_def['user']),
+            user=os.getenv('ELASTIC_USER', provider_def['user']),
             password=os.getenv('ELASTIC_PASSWORD', provider_def['password'])
         )
 
