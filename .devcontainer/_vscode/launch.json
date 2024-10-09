@@ -10,7 +10,8 @@
             "request": "launch",
             "program": "app.py",
             "cwd": "${workspaceFolder}/connected-systems-api",
-            "console": "integratedTerminal"
+            "console": "integratedTerminal",
+            "justMyCode": false
         }
     ]
 }
