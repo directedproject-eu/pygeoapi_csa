@@ -3,6 +3,7 @@ import json
 import logging
 import uuid
 from http import HTTPStatus
+from pprint import pformat
 
 import asyncpg
 import elasticsearch
@@ -17,9 +18,7 @@ from ..elasticsearch import ElasticsearchConnector, ElasticSearchConfig, parse_c
 from ..definitions import *
 
 LOGGER = logging.getLogger(__name__)
-
-
-# LOGGER.setLevel('DEBUG')
+LOGGER.setLevel('INFO')
 
 
 class Cache:
@@ -72,10 +71,16 @@ class ConnectedSystemsTimescaleDBProvider(ConnectedSystemsPart2Provider, Elastic
             user=provider_def["elastic"]["user"],
             password=provider_def["elastic"]["password"],
             dbname=provider_def["elastic"]["dbname"],
+            verify_certs=provider_def["elastic"].get("verify_certs", True),
+            ca_certs=provider_def["elastic"].get("ca_certs", None),
         )
         self.parser = OMJsonSchemaParser()
 
     async def open(self):
+        LOGGER.info(f"""
+                    ====== Connecting to TimescaleDB with configuration ====== 
+                        {pformat(self._ts_config)}
+                    """)
         self._pool = await asyncpg.create_pool(self._ts_config.connection_string(),
                                                min_size=self._ts_config.pool_min_size,
                                                max_size=self._ts_config.pool_max_size)

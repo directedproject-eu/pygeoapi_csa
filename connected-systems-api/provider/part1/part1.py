@@ -16,6 +16,7 @@
 import logging
 import uuid
 from datetime import datetime as DateTime
+from pprint import pprint, pformat
 from typing import Callable, Awaitable, Coroutine
 
 import elasticsearch
@@ -27,9 +28,7 @@ from ..elasticsearch import ElasticsearchConnector, ElasticSearchConfig, parse_c
 from ..definitions import *
 
 LOGGER = logging.getLogger(__name__)
-
-
-# LOGGER.setLevel(level='DEBUG')
+LOGGER.setLevel(level='INFO')
 
 
 class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchConnector):
@@ -41,7 +40,9 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchCon
             port=int(provider_def['port']),
             dbname=provider_def['dbname'],
             user=provider_def['user'],
-            password=provider_def['password']
+            password=provider_def['password'],
+            verify_certs=provider_def.get('verify_certs', True),
+            ca_certs=provider_def.get('ca_certs', "")
         )
 
     def get_conformance(self) -> List[str]:
@@ -190,7 +191,7 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchCon
                 c.meta.id = coll["id"]
                 await c.save()
 
-            LOGGER.critical(f"creating mandatory collection {coll['id']}")
+            LOGGER.info(f"creating mandatory collection {coll['id']}")
 
     async def query_collections(self, parameters: CollectionParams) -> CSAGetResponse:
         query = Collection().search()

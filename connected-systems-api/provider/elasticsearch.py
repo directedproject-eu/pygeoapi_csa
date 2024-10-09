@@ -1,6 +1,7 @@
 import json
 import json
 import logging
+from pprint import pformat
 from typing import Union
 
 from elastic_transport import NodeConfig
@@ -77,11 +78,18 @@ class ElasticSearchConfig:
     user: str
     password: str
     dbname: str
+    verify_certs: bool
+    ca_certs: Optional[str]
 
 
 class ElasticsearchConnector:
 
     async def connect_elasticsearch(self, config: ElasticSearchConfig) -> None:
+        LOGGER.info(f"""
+            ====== Connecting to ES with configuration ====== 
+                {pformat(config)}
+            """)
+
         LOGGER.debug(f'Connecting to Elasticsearch at: https://{config.hostname}:{config.port}/{config.dbname}')
         try:
             connections.create_connection(
@@ -89,13 +97,13 @@ class ElasticsearchConnector:
                     scheme="https",
                     host=config.hostname,
                     port=config.port,
-                    verify_certs=False,
-                    ca_certs=None,
-                    ssl_show_warn=False,
+                    verify_certs=config.verify_certs,
+                    ca_certs=config.ca_certs if config.verify_certs else None,
+                    ssl_show_warn=True,
                 )],
                 timeout=20,
                 http_auth=(config.user, config.password),
-                verify_certs=False)
+                verify_certs=config.verify_certs)
         except Exception as e:
             msg = f'Cannot connect to Elasticsearch: {e}'
             LOGGER.critical(msg)
@@ -114,7 +122,7 @@ class ElasticsearchConnector:
             excludes = []
         LOGGER.debug(json.dumps(query.to_dict(), indent=True, default=str))
 
-        found = (await query.source(excludes=excludes)[parameters.offset:parameters.offset+parameters.limit]
+        found = (await query.source(excludes=excludes)[parameters.offset:parameters.offset + parameters.limit]
                  .execute()).hits
 
         count = found.total.value

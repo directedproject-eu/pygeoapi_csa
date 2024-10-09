@@ -70,15 +70,19 @@ dynamic-resources:
     type: connected-systems
     title: "elasticsearch-csa-adapter"
     description: "Adapter to Elasticsearch CSA-Part1 Backend"
+    strict_validation: True
     keywords: [ ]
-    provider:
+    provider: &es-config
       type: elastic-csa-adapter
       name: ElasticSearchConnectedSystems
-      host: es01
+      host: localhost
       port: 9200
       dbname: csa
       user: elastic
       password: password
+      verify_certs: False   # True if ES certificates are to be validated. Default 'true'
+      ca_certs: ""   # Path to PEM-encoded Certificate of ES
+
 
   connected-systems-api-part2:
     type: connected-systems
@@ -89,14 +93,9 @@ dynamic-resources:
       type: timescale-csa-adapter
       name: TimescaleDBConnectedSystems
       timescale:
-        host: timescaledb
+        host: localhost
         port: 5432
-        dbname: csa
         user: timescaledb
         password: password
-      elastic:
-        host: es01
-        port: 9200
         dbname: csa
-        user: elastic
-        password: password
+      elastic: *es-config
