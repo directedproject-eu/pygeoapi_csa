@@ -1,0 +1,128 @@
+name: "build push CSA images"
+concurrency:
+  group: "csa"
+  cancel-in-progress: true
+
+env:
+  BUILD_CONTEXT: ./
+  BUILD_TARGET_STAGE: hybrid
+  IMAGE_AUTHORS: https://52North.org/
+  IMAGE_DESCRIPTION: 52°North DIRECTED CSA
+  IMAGE_LICENSES: Gplv2
+  IMAGE_TAG: 52north/directed-csa
+  IMAGE_TITLE: 52°North DIRECTED CSA
+  IMAGE_VENDOR: 52°North GmbH
+  METADATA_TAG_PATTERN: v(.*)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: "Please provide a git tag value, e.g. v1.0-manually-triggered.1"
+        required: true
+        type: string
+        default: "v1.0-manually-triggered.1"
+  push:
+    tags:
+    - "v*"
+
+jobs:
+  push_to_docker_hub:
+
+    name: build push docker image
+    runs-on: ubuntu-latest
+
+    steps:
+    -
+      name: Checkout Repository
+      uses: actions/checkout@v3
+    -
+      name: Set up Docker Buildkit env
+      uses: docker/setup-buildx-action@v2
+    -
+      name: Extract metadata (tags, labels) for tagging Docker Image
+      id: meta
+      uses: docker/metadata-action@v4
+      with:
+        images: "${{ env.IMAGE_TAG }}"
+        labels: |
+          "org.opencontainers.image.authors=${{ env.IMAGE_AUTHORS }}"
+          "org.opencontainers.image.vendor=${{ env.IMAGE_VENDOR }}"
+          "org.opencontainers.image.description=${{ env.IMAGE_DESCRIPTION }}"
+          "org.opencontainers.image.title=${{ env.IMAGE_TITLE }}"
+          "org.opencontainers.image.licenses=${{ env.IMAGE_LICENSES }}"
+        tags: |
+          type=match,pattern=${{ env.METADATA_TAG_PATTERN }},group=1,value=${{ github.event.inputs.tags }}
+    -
+      name: Log in to Docker Hub
+      if: github.event_name != 'pull_request'
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_TOKEN }}
+    -
+      name: Build and push Docker image
+      uses: docker/build-push-action@v3
+      with:
+        context: "${{ env.BUILD_CONTEXT }}"
+        target: ${{ env.BUILD_TARGET_STAGE }}
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha
+    -
+      name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      env:
+        #
+        # Using AWS repository to circumvent TOOMANYREQUEST error from github repository
+        #
+        TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2
+        TRIVY_JAVA_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-java-db:1
+      with:
+        image-ref: "${{ env.IMAGE_TAG }}"
+        format: 'table'
+        output: 'trivy-results.txt'
+        exit-code: '0'
+        ignore-unfixed: true
+        vuln-type: 'os,library'
+        severity: 'CRITICAL,HIGH'
+    -
+      name: remove empty results
+      run: |
+        ls -lhA trivy-results.txt; \
+        find trivy-results.txt -type f -empty -delete -print
+    -
+      if: ${{ hashFiles('trivy-results.txt') != '' }}
+      name: remove "no HIGH or CRITICAL CVEs found" results
+      run: |
+        if [[ -s trivy-results.txt ]] \
+          && [[ $(wc -l trivy-results.txt| awk '{print $1}') -eq 5 ]] \
+          && [[ $(grep -rc "Total: 0 (HIGH: 0, CRITICAL: 0)" trivy-results.txt) -eq 1 ]]; then \
+            rm -v trivy-results.txt; \
+        fi
+    -
+      if: ${{ hashFiles('trivy-results.txt') != '' }}
+      name: Upload to 52N slack
+      uses: MeilCli/slack-upload-file@v4
+      with:
+        slack_token: ${{ secrets.SLACK_TOKEN }}
+        file_path: trivy-results.txt
+        file_type: text/plain
+        title: trivy scan results of ${{ github.repository }}
+        channel_id: ${{ secrets.SLACK_CHANNEL_ID_52N }}
+        initial_comment: "Trivy Results for '${{ env.IMAGE_TAG }}' from '${{ github.repository }}' uploaded. Please review: https://github.com/${{ github.repository }}/actions"
+    -
+      name: Trigger redeployment
+      uses: actions/github-script@v6
+      with:
+        github-token: ${{ secrets.GHA_WORKFLOW_TRIGGER }}
+        script: |
+            const result = await github.rest.actions.createWorkflowDispatch({
+              owner: '${{ secrets.TRIGGER_ORGA }}',
+              repo: '${{ secrets.TRIGGER_REPO }}',
+              workflow_id: '${{ secrets.TRIGGER_WORKFLOW }}',
+              ref: '${{ secrets.TRIGGER_REF }}'
+            })
+            console.log(result)
