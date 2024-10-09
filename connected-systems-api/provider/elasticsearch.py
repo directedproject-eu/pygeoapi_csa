@@ -1,6 +1,8 @@
+import copy
 import json
 import json
 import logging
+from dataclasses import field
 from pprint import pformat
 from typing import Union
 
@@ -12,7 +14,7 @@ from pygeoapi.provider.base import ProviderConnectionError, ProviderItemNotFound
 from .definitions import *
 
 LOGGER = logging.getLogger(__name__)
-LOGGER.setLevel('DEBUG')
+LOGGER.setLevel('INFO')
 
 
 def parse_datetime_params(query: AsyncSearch, parameters: DatetimeParam) -> AsyncSearch:
@@ -76,10 +78,11 @@ class ElasticSearchConfig:
     hostname: str
     port: int
     user: str
-    password: str
     dbname: str
     verify_certs: bool
     ca_certs: Optional[str]
+    password: str = field(repr=False)
+    password_censored: str = "***********"
 
 
 class ElasticsearchConnector:

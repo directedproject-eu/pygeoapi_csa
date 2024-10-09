@@ -1,17 +1,7 @@
-version: "3.8"
-
 volumes:
   certs:
     driver: local
   esdata01:
-    driver: local
-  kibanadata:
-    driver: local
-  metricbeatdata01:
-    driver: local
-  filebeatdata01:
-    driver: local
-  logstashdata01:
     driver: local
   postgresdata:
     driver: local
@@ -29,22 +19,34 @@ services:
     build:
       context: ../../../
       target: hybrid
-    env_file:
-      - .env
-    volumes:
-      - ./openapi-config-csa.yml:/app/openapi-config-csa.yml
-      - ./pygeoapi-config.yml:/app/pygeoapi-config.yml
+    environment:
+      PYTHONUNBUFFERED: 1
+      CSA_SERVER_BIND_HOST: localhost
+      CSA_SERVER_BIND_PORT: 5000
+      CSA_CORS_ALLOW_ORIGIN: "*"
+      #CSA_CORS_ALLOW_CREDENTIALS:
+      #CSA_CORS_ALLOW_METHODS:
+      #CSA_CORS_EXPOSE_HEADERS:
+      #CSA_CORS_MAX_AGE:
+      CSA_DYNAMIC-RESOURCES_CSA-PART1_PROVIDER_HOST: es01
+      CSA_DYNAMIC-RESOURCES_CSA-PART1_PROVIDER_PASSWORD: ${ELASTIC_PASSWORD}
+      CSA_DYNAMIC-RESOURCES_CSA-PART1_PROVIDER_USER: elastic
+      CSA_DYNAMIC-RESOURCES_CSA-PART2_PROVIDER_ELASTIC_HOST: es01
+      CSA_DYNAMIC-RESOURCES_CSA-PART2_PROVIDER_ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+      CSA_DYNAMIC-RESOURCES_CSA-PART2_PROVIDER_ELASTIC_USER: elastic
+      CSA_DYNAMIC-RESOURCES_CSA-PART2_PROVIDER_TIMESCALE_HOST: timescaledb
+      CSA_DYNAMIC-RESOURCES_CSA-PART2_PROVIDER_TIMESCALE_PASSWORD: password
+      CSA_DYNAMIC-RESOURCES_CSA-PART2_PROVIDER_TIMESCALE_USER: timescaledb
     ports:
       - 5000:5000
-    depends_on:
-      es01:
-        condition: service_healthy
-      timescaledb:
-        condition: service_healthy
+  #    depends_on:
+  #      es01:
+  #        condition: service_healthy
+  #      timescaledb:
+  #        condition: service_healthy
 
   timescaledb:
     image: timescale/timescaledb-ha:pg16
-    restart: always
     ports:
       - 5432:5432
     environment:
@@ -159,36 +161,36 @@ services:
       retries: 120
 
   ######  Debugging  ######
-  kibana:
-    depends_on:
-      es01:
-        condition: service_healthy
-    image: docker.elastic.co/kibana/kibana:${STACK_VERSION}
-    labels:
-      co.elastic.logs/module: kibana
-    volumes:
-      - certs:/usr/share/kibana/config/certs
-      - kibanadata:/usr/share/kibana/data
-    ports:
-      - ${KIBANA_PORT}:5601
-    environment:
-      - SERVERNAME=kibana
-      - ELASTICSEARCH_HOSTS=https://es01:9200
-      - ELASTICSEARCH_USERNAME=kibana_system
-      - ELASTICSEARCH_PASSWORD=${KIBANA_PASSWORD}
-      - ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES=config/certs/ca/ca.crt
-      - XPACK_SECURITY_ENCRYPTIONKEY=${ENCRYPTION_KEY}
-      - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=${ENCRYPTION_KEY}
-      - XPACK_REPORTING_ENCRYPTIONKEY=${ENCRYPTION_KEY}
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl -s -I http://localhost:5601 | grep -q 'HTTP/1.1 302 Found'",
-        ]
-      interval: 10s
-      timeout: 10s
-      retries: 120
+#  kibana:
+#    depends_on:
+#      es01:
+#        condition: service_healthy
+#    image: docker.elastic.co/kibana/kibana:${STACK_VERSION}
+#    labels:
+#      co.elastic.logs/module: kibana
+#    volumes:
+#      - certs:/usr/share/kibana/config/certs
+#      - kibanadata:/usr/share/kibana/data
+#    ports:
+#      - ${KIBANA_PORT}:5601
+#    environment:
+#      - SERVERNAME=kibana
+#      - ELASTICSEARCH_HOSTS=https://es01:9200
+#      - ELASTICSEARCH_USERNAME=kibana_system
+#      - ELASTICSEARCH_PASSWORD=${KIBANA_PASSWORD}
+#      - ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES=config/certs/ca/ca.crt
+#      - XPACK_SECURITY_ENCRYPTIONKEY=${ENCRYPTION_KEY}
+#      - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=${ENCRYPTION_KEY}
+#      - XPACK_REPORTING_ENCRYPTIONKEY=${ENCRYPTION_KEY}
+#    healthcheck:
+#      test:
+#        [
+#          "CMD-SHELL",
+#          "curl -s -I http://localhost:5601 | grep -q 'HTTP/1.1 302 Found'",
+#        ]
+#      interval: 10s
+#      timeout: 10s
+#      retries: 120
 
 #  pgadmin:
 #    image: dpage/pgadmin4

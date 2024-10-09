@@ -1,4 +1,5 @@
 import logging
+from dataclasses import field
 from typing import Self
 
 from ..definitions import *
@@ -19,19 +20,19 @@ class Observation:
     parameters: Optional[str] = None
 
 
-
 @dataclass(frozen=True)
 class TimescaleDbConfig:
     hostname: str
     port: int
     user: str
-    password: str
+    password: str = field(repr=False)
     dbname: str
 
     pool_min_size: int = 10
     pool_max_size: int = 10
 
     drop_tables: bool = False  # True if existing tables should be dropped
+    password_censored: str = "***********"
 
     def connection_string(self) -> str:
         return f"postgres://{self.user}:{self.password}@{self.hostname}:{self.port}/{self.dbname}"

@@ -22,13 +22,17 @@ import orjson
 from jsonschema.protocols import Validator
 from jsonschema.validators import Draft7Validator
 from pygeoapi.api import *
-from pygeoapi.flask_app import CONFIG, OPENAPI
+from pygeoapi.config import get_config
+from pygeoapi.openapi import load_openapi_document
 from pygeoapi.provider.base import ProviderItemNotFoundError
 from pygeoapi.util import render_j2_template
 
 from meta import CSMeta
 from provider.definitions import *
 from util import *
+
+LOGGER = logging.getLogger(__name__)
+LOGGER.setLevel('DEBUG')
 
 
 class SchemaValidator:
@@ -77,11 +81,35 @@ class CSAPI(CSMeta):
     validator = SchemaValidator()
     strict_validation = True
 
-    def __init__(self, config, openapi):
+    def __init__(self, config: Dict, openapi: Dict):
+        # Allow for configuration using environment variables that overwrite values from the provided config
+        for key, val in os.environ.items():
+            if key.startswith("CSA_"):
+                # resolve key to config property
+                # config properties may include underscored encoded as __
+                path = []
+                for e in key.replace("__", "||").split("_"):
+                    path.append(e.replace("||", "_"))
+                node = config
+                for subpath in path[1:-1]:
+                    subpath = subpath.lower()
+                    if subpath.lower() in node:
+                        # descend
+                        node = node.get(subpath)
+                    else:
+                        # key does not exist in the config yet. create it
+                        node[subpath] = {}
+
+                LOGGER.info(f"Overwriting property with env value: {path} --> {val}")
+                node[path[-1].lower()] = val
+
         super().__init__(config, openapi)
 
         if config['dynamic-resources'] is not None:
-            api_part1 = config['dynamic-resources'].get('connected-systems-api-part1', None)
+            api_part1 = None
+            for resource in config['dynamic-resources']:
+                if config['dynamic-resources'][resource].get('type') == "connected-systems-part1":
+                    api_part1 = config['dynamic-resources'][resource]
             if api_part1 is not None:
                 provider_definition = api_part1['provider']
                 provider_definition["base_url"] = self.base_url
@@ -93,7 +121,10 @@ class CSAPI(CSMeta):
                 if self.config.get('resources') is None:
                     self.config['resources'] = {}
 
-            api_part2 = config['dynamic-resources'].get('connected-systems-api-part2', None)
+            api_part2 = None
+            for resource in config['dynamic-resources']:
+                if config['dynamic-resources'][resource].get('type') == "connected-systems-part2":
+                    api_part2 = config['dynamic-resources'][resource]
             if api_part2 is not None:
                 provider_definition = api_part2['provider']
                 provider_definition["base_url"] = self.base_url
@@ -442,8 +473,9 @@ class CSAPI(CSMeta):
                 "href": "?f=application/json"
             }
         ]
+        path = os.path.join(os.path.dirname(__file__), "templates/connected-systems/viewer.html")
         content = render_j2_template(self.tpl_config,
-                                     'templates/connected-systems/viewer.html',
+                                     path,
                                      data,
                                      request.locale)
         return headers, HTTPStatus.OK, content
@@ -472,5 +504,13 @@ PLUGINS["provider"]["ElasticSearchConnectedSystems"] = \
     "provider.part1.part1.ConnectedSystemsESProvider"
 PLUGINS["provider"]["TimescaleDBConnectedSystems"] = \
     "provider.part2.part2.ConnectedSystemsTimescaleDBProvider"
+
+if not os.getenv("PYGEOAPI_CONFIG"):
+    os.environ["PYGEOAPI_CONFIG"] = os.path.join(os.path.dirname(__file__), "default-config.yml")
+if not os.getenv("PYGEOAPI_OPENAPI"):
+    os.environ["PYGEOAPI_OPENAPI"] = os.path.join(os.path.dirname(__file__), "default-openapi.yml")
+
+CONFIG = get_config()
+OPENAPI = load_openapi_document()
 
 csapi_ = CSAPI(CONFIG, OPENAPI)

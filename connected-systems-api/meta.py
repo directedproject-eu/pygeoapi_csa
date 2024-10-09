@@ -1,4 +1,5 @@
 import logging
+import os
 from copy import deepcopy
 from http import HTTPStatus
 
@@ -178,11 +179,17 @@ class CSMeta:
                 fcm['collection'] = True
 
             if filter_dict_by_key_value(self.config['dynamic-resources'],
-                                        'type', 'connected-systems'):
+                                        'type', 'connected-systems-part1'):
                 fcm['connected-systems'] = True
                 fcm['collection'] = True
 
-            content = render_j2_template(self.tpl_config, 'templates/landing_page.html',
+            if filter_dict_by_key_value(self.config['dynamic-resources'],
+                                        'type', 'connected-systems-part2'):
+                fcm['connected-systems'] = True
+                fcm['collection'] = True
+
+            path = os.path.join(os.path.dirname(__file__), "templates/landing_page.html")
+            content = render_j2_template(self.tpl_config, path,
                                          fcm, request.locale)
             return headers, HTTPStatus.OK, content
 
@@ -363,8 +370,9 @@ class CSMeta:
         })
 
         if request.format == F_HTML:  # render
+            path = os.path.join(os.path.dirname(__file__), "templates/connected-systems/overview.html")
             content = render_j2_template(self.tpl_config,
-                                         'templates/connected-systems/overview.html',
+                                         path,
                                          content, request.locale)
             return headers, HTTPStatus.OK, content
 
