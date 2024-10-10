@@ -36,6 +36,7 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchCon
     def __init__(self, provider_def: Dict):
         super().__init__(provider_def)
         self._es_config = ElasticSearchConfig(
+            connector_alias=es_conn_part1,
             hostname=provider_def['host'],
             port=int(provider_def['port']),
             dbname=provider_def['dbname'],
@@ -194,7 +195,7 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchCon
             LOGGER.info(f"creating mandatory collection {coll['id']}")
 
     async def query_collections(self, parameters: CollectionParams) -> CSAGetResponse:
-        query = Collection().search()
+        query = Collection.search()
 
         query = parse_csa_params(query, parameters)
         query = parse_spatial_params(query, parameters)

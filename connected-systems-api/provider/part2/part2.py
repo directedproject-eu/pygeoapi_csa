@@ -66,6 +66,7 @@ class ConnectedSystemsTimescaleDBProvider(ConnectedSystemsPart2Provider, Elastic
         )
 
         self._es_config = ElasticSearchConfig(
+            connector_alias=es_conn_part2,
             hostname=provider_def["elastic"]["host"],
             port=provider_def["elastic"]["port"],
             user=provider_def["elastic"]["user"],

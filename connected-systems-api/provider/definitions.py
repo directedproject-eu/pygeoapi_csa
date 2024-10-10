@@ -164,6 +164,10 @@ class ObservationsParams(FoiObservedpropertyParam, ResulttimePhenomenontimeParam
     datastream: Optional[str] = None
 
 
+es_conn_part1 = "part1"
+es_conn_part2 = "part2"
+
+
 class DatastreamSchema(InnerDoc):
     obsFormat: str
 
@@ -175,6 +179,7 @@ class Datastream(AsyncDocument):
 
     class Index:
         name = "datastreams"
+        using = es_conn_part2
 
 
 class Collection(AsyncDocument):
@@ -182,6 +187,7 @@ class Collection(AsyncDocument):
 
     class Index:
         name = "collections"
+        using = es_conn_part1
 
 
 class CharacteristicsProp(InnerDoc):
@@ -206,6 +212,7 @@ class System(AsyncDocument):
 
     class Index:
         name = "systems"
+        using = es_conn_part1
 
 
 class Deployment(AsyncDocument):
@@ -214,6 +221,7 @@ class Deployment(AsyncDocument):
 
     class Index:
         name = "deployments"
+        using = es_conn_part1
 
 
 class Procedure(AsyncDocument):
@@ -221,6 +229,7 @@ class Procedure(AsyncDocument):
 
     class Index:
         name = "procedures"
+        using = es_conn_part1
 
 
 class SamplingFeature(AsyncDocument):
@@ -229,6 +238,7 @@ class SamplingFeature(AsyncDocument):
 
     class Index:
         name = "sampling_features"
+        using = es_conn_part1
 
 
 class Property(AsyncDocument):
@@ -236,6 +246,7 @@ class Property(AsyncDocument):
 
     class Index:
         name = "properties"
+        using = es_conn_part1
 
 
 class ConnectedSystemsProvider:

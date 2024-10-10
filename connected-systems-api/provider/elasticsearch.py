@@ -82,6 +82,7 @@ class ElasticSearchConfig:
     verify_certs: bool
     ca_certs: Optional[str]
     password: str = field(repr=False)
+    connector_alias: str = field(repr=False)
     password_censored: str = "***********"
 
 
@@ -96,6 +97,7 @@ class ElasticsearchConnector:
         LOGGER.debug(f'Connecting to Elasticsearch at: https://{config.hostname}:{config.port}/{config.dbname}')
         try:
             connections.create_connection(
+                alias=config.connector_alias,
                 hosts=[NodeConfig(
                     scheme="https",
                     host=config.hostname,
