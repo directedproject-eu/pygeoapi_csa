@@ -39,6 +39,10 @@ services:
       CSA_DYNAMIC-RESOURCES_CSA-PART2_PROVIDER_TIMESCALE_USER: timescaledb
     ports:
       - 5000:5000
+    healthcheck:
+      test: [ "CMD-SHELL", 'sh -c "wget -q -nv --spider http://127.0.0.1:5000/status || exit 1"' ]
+      interval: 15s
+      timeout: 30s
   #    depends_on:
   #      es01:
   #        condition: service_healthy

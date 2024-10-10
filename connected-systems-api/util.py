@@ -1,9 +1,11 @@
-from enum import Enum
-from typing import Self, Union, Tuple, Optional
+from dataclasses import dataclass
+from enum import Enum, auto
+from typing import Self, Union, Tuple, Optional, List
 
 from pygeoapi import l10n
 from pygeoapi.api import APIRequest
-from quart import make_response
+from quart import make_response, Quart, Request
+from werkzeug.datastructures import MultiDict
 
 APIResponse = Tuple[dict | None, int, str]
 Path = Union[Tuple[str, str], None]
@@ -25,6 +27,45 @@ class ALLOWED_MIMES(Enum):
     def values(cls):
         return [cls.F_HTML.value, cls.F_JSON.value, cls.F_GEOJSON.value, cls.F_SMLJSON.value,
                 cls.F_OMJSON.value, cls.F_SWEJSON.value]
+
+
+class State(str, Enum):
+    STARTING = "starting"
+    RUNNING = "running"
+    DEGRADED = "degraded"
+    ERROR = "error"
+
+
+class AppMode(str, Enum):
+    PROD = "prod"
+    DEV = "dev"
+
+
+class AppState:
+    mode: AppMode
+    state: State
+    enabled_specs: List
+    _version: str
+
+    def __init__(self, version: str):
+        self._version = version
+
+    def __repr__(self):
+        return f"""# HELP version
+# TYPE csapi_meta info
+csapi_meta_info{{version={self._version}, mode={self.mode}}} 1 
+"""
+
+
+# makes request args modifiable
+class ModifiableRequest(Request):
+    dict_storage_class = MultiDict
+    parameter_storage_class = MultiDict
+
+
+class CustomQuart(Quart):
+    request_class = ModifiableRequest
+    metrics: AppState
 
 
 class AsyncAPIRequest(APIRequest):

@@ -13,36 +13,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # =================================================================
-import inspect
 import os.path
 
 from pygeoapi import static
-from quart import Quart, request, Request, send_from_directory
+from quart import request, send_from_directory
 from quart_cors import cors
-from werkzeug.datastructures import MultiDict
 
 from api import *
-from routes.edr import edr
-from routes.stac import stac
 from routes.collections import collections
 from routes.coverages import coverage
 from routes.csa import csa
+from routes.edr import edr
 from routes.processes import oapip
-
-
-# makes request args modifiable
-class ModifiableRequest(Request):
-    dict_storage_class = MultiDict
-    parameter_storage_class = MultiDict
-
-
-class CustomQuart(Quart):
-    request_class = ModifiableRequest
-
+from routes.stac import stac
 
 APP = CustomQuart(__name__,
                   static_folder=static.__path__._path[0],
                   static_url_path='/static')
+APP.metrics = AppState(version="0.1")
 
 APP.config['QUART_CORS_ALLOW_ORIGIN'] = os.environ.get("CSA_CORS_ALLOW_ORIGIN") or ""
 APP.config['QUART_CORS_ALLOW_CREDENTIALS'] = os.environ.get("CSA_CORS_ALLOW_CREDENTIALS")
@@ -65,30 +53,45 @@ APP.register_blueprint(oapip)
 APP.register_blueprint(coverage)
 APP.register_blueprint(collections)
 
-MODE = "production"
 
-
-@APP.route('/')
+@APP.get('/')
 async def landing_page():
     request.collection = ""
     return await to_response(await csapi_.landing(request))
 
 
-@APP.route('/assets/<path:filename>')
+@APP.get('/metrics')
+async def metrics():
+    headers = {"Content-Type": "text/plain"}
+    return await make_response(str(APP.metrics), headers)
+
+
+@APP.get('/status')
+async def status():
+    match APP.metrics.state.value:
+        case State.RUNNING:
+            code = HTTPStatus.OK
+        case _:
+            code = HTTPStatus.INTERNAL_SERVER_ERROR
+
+    return await make_response("", code)
+
+
+@APP.get('/assets/<path:filename>')
 async def assets(filename):
     request.collection = None
     abspath = os.path.join(os.path.dirname(__file__), "templates/connected-systems/assets")
     return await send_from_directory(abspath, filename)
 
 
-@APP.route('/openapi')
+@APP.get('/openapi')
 async def openapi():
     from pygeoapi import flask_app
     request.collection = None
     return flask_app.openapi()
 
 
-@APP.route('/conformance')
+@APP.get('/conformance')
 async def conformance():
     request.collection = None
     return await to_response(await csapi_.conformance(request))
@@ -97,14 +100,19 @@ async def conformance():
 @APP.before_serving
 async def init_db():
     """ Initialize peristent database/provider connections """
-    if csapi_.provider_part1:
-        await csapi_.provider_part1.open()
-        if MODE == "dev":
+    try:
+        if csapi_.provider_part1:
+            await csapi_.provider_part1.open()
             await csapi_.provider_part1.setup()
-    if csapi_.provider_part2:
-        await csapi_.provider_part2.open()
-        if MODE == "dev":
+        if csapi_.provider_part2:
+            await csapi_.provider_part2.open()
             await csapi_.provider_part2.setup()
+    except Exception as e:
+        LOGGER.error(e)
+        APP.metrics.state = State.ERROR
+        return
+
+    APP.metrics.state = State.RUNNING
 
 
 @APP.after_serving
@@ -116,14 +124,9 @@ async def close_db():
         await csapi_.provider_part2.close()
 
 
-def run():
-    for _ in range(5):
-        LOGGER.critical("!!! RUNNING IN DEV MODE !!! ")
-    """ Initialize peristent database/provider connections """
-    APP.run(debug=True, host="localhost", port=5000)
-
-
 if __name__ == "__main__":
-    # We run in DEV mode
-    MODE = "dev"
-    run()
+    for _ in range(5):
+        LOGGER.critical("!!! RUNNING IN DEBUG MODE !!! ")
+    """ Initialize peristent database/provider connections """
+    APP.metrics.mode = AppMode.DEV
+    APP.run(debug=True, host="localhost", port=5000)
