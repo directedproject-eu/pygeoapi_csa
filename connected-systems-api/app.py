@@ -14,9 +14,11 @@
 # limitations under the License.
 # =================================================================
 import os.path
+import secrets
 
 from pygeoapi import static
 from quart import request, send_from_directory
+from quart_auth import basic_auth_required
 from quart_cors import cors
 
 from api import *
@@ -43,6 +45,30 @@ APP = cors(APP)
 
 APP.url_map.strict_slashes = False
 APP.config['JSONIFY_PRETTYPRINT_REGULAR'] = CONFIG['server'].get('pretty_print', False)
+
+if os.getenv("QUART_AUTH_BASIC", True):
+    if not os.getenv("QUART_AUTH_BASIC_USERNAME"):
+        name = secrets.token_hex()
+        APP.config["QUART_AUTH_BASIC_USERNAME"] = name
+        LOGGER.critical(f"QUART_AUTH_BASIC is set but no credentials are provided! generating username: {name}")
+    if not os.getenv("QUART_AUTH_BASIC_PASSWORD"):
+        pwd = secrets.token_hex()
+        APP.config["QUART_AUTH_BASIC_PASSWORD"] = pwd
+        LOGGER.critical(f"QUART_AUTH_BASIC is set but no credentials are provided! generating password: {pwd}")
+
+
+    @csa.before_request
+    @basic_auth_required()
+    async def is_auth():
+        # Auth is handled by @basic_auth_required wrapper already
+        return None
+
+
+    @collections.before_request
+    @basic_auth_required()
+    async def is_auth():
+        # Auth is handled by @basic_auth_required wrapper already
+        return None
 
 APP.register_blueprint(csa)
 

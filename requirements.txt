@@ -16,5 +16,6 @@ tqdm
 
 quart
 quart-cors
+quart-auth
 
 orjson
