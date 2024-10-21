@@ -18,7 +18,6 @@ services:
     image: docker.52north.org/sensor-web/cs-api:latest
     build:
       context: ../../../
-      target: hybrid
     environment:
       PYTHONUNBUFFERED: 1
       CSA_SERVER_BIND_HOST: localhost

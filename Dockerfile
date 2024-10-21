@@ -29,16 +29,17 @@ RUN pip install --no-deps -r requirements_nodeps.txt
 
 CMD ["hypercorn", "-c", "hypercorn.conf.py", "connected-systems-api/app:APP"]
 
-FROM base AS toardb
+#FROM base AS toardb
 # individual requirements for toardb-provider
-COPY requirements_toardb_csa.txt .
-RUN pip install -r requirements_toardb_csa.txt
+#COPY requirements_toardb_csa.txt .
+#RUN pip install -r requirements_toardb_csa.txt
 
 # copy application files
-COPY connected-systems-api connected-systems-api
-COPY hypercorn.conf.py .
+#COPY connected-systems-api connected-systems-api
+#COPY hypercorn.conf.py .
 
-FROM base AS hybrid
+#FROM base AS hybrid
+FROM base
 # individual requirements for hybrid-provider
 COPY requirements_hybrid_csa.txt .
 RUN pip install -r requirements_hybrid_csa.txt
