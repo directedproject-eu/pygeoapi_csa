@@ -47,14 +47,15 @@ APP.url_map.strict_slashes = False
 APP.config['JSONIFY_PRETTYPRINT_REGULAR'] = CONFIG['server'].get('pretty_print', False)
 
 if os.getenv("QUART_AUTH_BASIC", True):
-    if not os.getenv("QUART_AUTH_BASIC_USERNAME"):
-        name = secrets.token_hex()
-        APP.config["QUART_AUTH_BASIC_USERNAME"] = name
-        LOGGER.critical(f"QUART_AUTH_BASIC is set but no credentials are provided! generating username: {name}")
-    if not os.getenv("QUART_AUTH_BASIC_PASSWORD"):
-        pwd = secrets.token_hex()
-        APP.config["QUART_AUTH_BASIC_PASSWORD"] = pwd
-        LOGGER.critical(f"QUART_AUTH_BASIC is set but no credentials are provided! generating password: {pwd}")
+
+    if not os.getenv("QUART_AUTH_BASIC_USERNAME", None) or os.getenv("QUART_AUTH_BASIC_PASSWORD", None):
+        APP.metrics.state = State.ERROR
+        APP.config["QUART_AUTH_BASIC_USERNAME"] = secrets.token_hex()
+        APP.config["QUART_AUTH_BASIC_PASSWORD"] = secrets.token_hex()
+        LOGGER.critical(f"QUART_AUTH_BASIC is set but no credentials are provided!")
+    else:
+        APP.config["QUART_AUTH_BASIC_USERNAME"] = os.getenv("QUART_AUTH_BASIC_PASSWORD")
+        APP.config["QUART_AUTH_BASIC_PASSWORD"] = os.getenv("QUART_AUTH_BASIC_USERNAME")
 
 
     @csa.before_request
@@ -70,14 +71,15 @@ if os.getenv("QUART_AUTH_BASIC", True):
         # Auth is handled by @basic_auth_required wrapper already
         return None
 
-APP.register_blueprint(csa)
+if APP.metrics.state == State.STARTING:
+    APP.register_blueprint(csa)
 
-# TODO: make this configurable, only import required/configured
-APP.register_blueprint(edr)
-APP.register_blueprint(stac)
-APP.register_blueprint(oapip)
-APP.register_blueprint(coverage)
-APP.register_blueprint(collections)
+    # TODO: make this configurable, only import required/configured
+    APP.register_blueprint(edr)
+    APP.register_blueprint(stac)
+    APP.register_blueprint(oapip)
+    APP.register_blueprint(coverage)
+    APP.register_blueprint(collections)
 
 
 @APP.get('/')
@@ -153,6 +155,16 @@ async def close_db():
 if __name__ == "__main__":
     for _ in range(5):
         LOGGER.critical("!!! RUNNING IN DEBUG MODE !!! ")
+
+    if not os.getenv("QUART_AUTH_BASIC_USERNAME"):
+        name = secrets.token_hex()
+        APP.config["QUART_AUTH_BASIC_USERNAME"] = name
+        LOGGER.critical(f"QUART_AUTH_BASIC is set but no credentials are provided! generating username: {name}")
+    if not os.getenv("QUART_AUTH_BASIC_PASSWORD"):
+        pwd = secrets.token_hex()
+        APP.config["QUART_AUTH_BASIC_PASSWORD"] = pwd
+        LOGGER.critical(f"QUART_AUTH_BASIC is set but no credentials are provided! generating password: {pwd}")
+
     """ Initialize peristent database/provider connections """
     APP.metrics.mode = AppMode.DEV
     APP.run(debug=True, host="localhost", port=5000)

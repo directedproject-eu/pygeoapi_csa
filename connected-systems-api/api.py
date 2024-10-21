@@ -100,7 +100,7 @@ class CSAPI(CSMeta):
                         # key does not exist in the config yet. create it
                         node[subpath] = {}
 
-                LOGGER.info(f"Overwriting property with env value: {path} --> {val}")
+                LOGGER.critical(f"Overwriting property with env value: {path} --> {val}")
                 node[path[-1].lower()] = val
 
         super().__init__(config, openapi)
