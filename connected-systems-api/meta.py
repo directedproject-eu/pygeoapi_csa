@@ -388,9 +388,6 @@ class CSMeta:
         :returns: tuple of headers, status code, content
         """
 
-        if not request.is_valid():
-            return self.get_format_exception(request)
-
         conformance_list = []
         if self.provider_part1:
             conformance_list = self.provider_part1.get_conformance()
