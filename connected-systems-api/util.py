@@ -43,7 +43,7 @@ class AppMode(str, Enum):
 
 class AppState:
     mode: AppMode
-    state: State
+    state: State = State.STARTING
     enabled_specs: List
     _version: str
 
