@@ -128,6 +128,9 @@ services:
     #     condition: service_healthy
     image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
     labels:
+      # hints used by filebeat
+      # Do we use filebeat here?
+      # Docu: https://www.elastic.co/guide/en/beats/filebeat/current/configuration-autodiscover-hints.html#_co_elastic_logsmodule
       co.elastic.logs/module: elasticsearch
     volumes:
       - certs:/usr/share/elasticsearch/config/certs
@@ -151,6 +154,7 @@ services:
       - xpack.security.transport.ssl.certificate_authorities=certs/ca/ca.crt
       - xpack.security.transport.ssl.verification_mode=certificate
       - xpack.license.self_generated.type=${LICENSE}
+      # TODO: sync with deployment resources
       - "ES_JAVA_OPTS=-Xms750m -Xmx750m"
     ulimits:
       memlock:
@@ -167,7 +171,14 @@ services:
       retries: 120
 
 ######  Debugging  ######
+#
+# KIBANA
+#
+# Connect to ui with user: elastic::password
+# managed indices: http://localhost:5601/app/management/data/index_management/indices
+#
 #  kibana:
+#
 #    depends_on:
 #      es01:
 #        condition: service_healthy
