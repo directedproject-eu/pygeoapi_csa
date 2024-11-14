@@ -10,7 +10,7 @@ python-dateutil
 pyyaml
 requests~=2.32
 rtree
-setuptools~=67.6.0
+setuptools~=70.0
 shapely~=2.0.4-r0
 tqdm
 urllib3~=1.26.15
