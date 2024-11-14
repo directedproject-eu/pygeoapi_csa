@@ -8,7 +8,7 @@ pygeofilter
 pyproj
 python-dateutil
 pyyaml
-requests~=2.31.0
+requests~=2.32
 rtree
 setuptools~=67.6.0
 shapely~=2.0.4-r0
