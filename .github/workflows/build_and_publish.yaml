@@ -62,7 +62,7 @@ jobs:
         password: ${{ secrets.DOCKER_TOKEN }}
     -
       name: Build and push Docker image
-      uses: docker/build-push-action@v3
+      uses: docker/build-push-action@v6
       with:
         context: "${{ env.BUILD_CONTEXT }}"
         target: ${{ env.BUILD_TARGET_STAGE }}
