@@ -7,10 +7,7 @@ pygeofilter
 pyproj
 python-dateutil
 pyyaml
-filelock
-setuptools
-hypercorn[uvloop]
-shapely~=2.0.4-r0
+requests~=2.31.0
 rtree
 setuptools~=67.6.0
 shapely~=2.0.4-r0
