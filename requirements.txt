@@ -1,3 +1,4 @@
+# https://packaging.python.org/en/latest/specifications/version-specifiers/#id5
 Babel
 requests
 jsonschema
