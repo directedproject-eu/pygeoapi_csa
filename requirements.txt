@@ -12,7 +12,10 @@ setuptools
 hypercorn[uvloop]
 shapely~=2.0.4-r0
 rtree
+setuptools~=67.6.0
+shapely~=2.0.4-r0
 tqdm
+urllib3~=1.26.15
 
 quart
 quart-cors
