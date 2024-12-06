@@ -2,7 +2,6 @@ name: "build push CSA images"
 concurrency:
   group: "csa"
   cancel-in-progress: true
-
 env:
   BUILD_CONTEXT: ./
   BUILD_TARGET_STAGE: hybrid
@@ -13,7 +12,6 @@ env:
   IMAGE_TITLE: 52°North DIRECTED CSA
   IMAGE_VENDOR: 52°North GmbH
   METADATA_TAG_PATTERN: v(.*)
-
 on:
   workflow_dispatch:
     inputs:
@@ -25,13 +23,11 @@ on:
   push:
     tags:
     - "v*"
-
 jobs:
   push_to_docker_hub:
-
     name: build push docker image
     runs-on: ubuntu-latest
-
+    timeout-minutes: 5
     steps:
     -
       name: Checkout Repository
