@@ -1,26 +1,24 @@
-import functools
+import json
 import json
 import logging
 import uuid
 from http import HTTPStatus
-from typing import List, Dict, Tuple
-import os
+from pprint import pformat
 
 import asyncpg
 import elasticsearch
 from asyncpg import Connection
-from elasticsearch import AsyncElasticsearch
-from elasticsearch_dsl import Search, AsyncSearch, async_connections, AsyncDocument, Keyword, AttrDict, Object
+from elasticsearch_dsl import async_connections
 from pygeoapi.provider.base import ProviderGenericError, ProviderItemNotFoundError
 
 from .formats.om_json_scalar import OMJsonSchemaParser
 from .util import TimescaleDbConfig, ObservationQuery, Observation
-from ..connector_elastic import ElasticsearchConnector, ElasticSearchConfig, parse_csa_params, \
+from ..elasticsearch import ElasticsearchConnector, ElasticSearchConfig, parse_csa_params, \
     parse_temporal_filters
 from ..definitions import *
 
 LOGGER = logging.getLogger(__name__)
-# LOGGER.setLevel('DEBUG')
+LOGGER.setLevel('INFO')
 
 
 class Cache:
@@ -57,11 +55,6 @@ class ConnectedSystemsTimescaleDBProvider(ConnectedSystemsPart2Provider, Elastic
     _cache: Cache = Cache()
 
     def __init__(self, provider_def):
-        """
-        * environment variables superseed provider_def
-        * provider_def is default fallback
-        * LIMITATION: elastic search config uses the same environment variables like ../part1/elasticsearch.py
-        """
         super().__init__(provider_def)
         self.base_url = provider_def["base_url"]
         self._ts_config = TimescaleDbConfig(
@@ -73,15 +66,22 @@ class ConnectedSystemsTimescaleDBProvider(ConnectedSystemsPart2Provider, Elastic
         )
 
         self._es_config = ElasticSearchConfig(
-            hostname=os.getenv('ELASTIC_HOST', provider_def["elastic"]["host"]),
-            port=int(os.getenv('ELASTIC_PORT', provider_def["elastic"]["port"])),
-            dbname=os.getenv('ELASTIC_DB', provider_def["elastic"]["dbname"]),
-            user=os.getenv('ELASTIC_USER', provider_def["elastic"]["user"]),
-            password=os.getenv('ELASTIC_PASSWORD', provider_def["elastic"]["password"])
+            connector_alias=es_conn_part2,
+            hostname=provider_def["elastic"]["host"],
+            port=provider_def["elastic"]["port"],
+            user=provider_def["elastic"]["user"],
+            password=provider_def["elastic"]["password"],
+            dbname=provider_def["elastic"]["dbname"],
+            verify_certs=provider_def["elastic"].get("verify_certs", True),
+            ca_certs=provider_def["elastic"].get("ca_certs", None),
         )
         self.parser = OMJsonSchemaParser()
 
     async def open(self):
+        LOGGER.info(f"""
+                    ====== Connecting to TimescaleDB with configuration ====== 
+                        {pformat(self._ts_config)}
+                    """)
         self._pool = await asyncpg.create_pool(self._ts_config.connection_string(),
                                                min_size=self._ts_config.pool_min_size,
                                                max_size=self._ts_config.pool_max_size)
@@ -91,7 +91,7 @@ class ConnectedSystemsTimescaleDBProvider(ConnectedSystemsPart2Provider, Elastic
 
     async def close(self):
         await self._pool.close()
-        es = async_connections.get_connection()
+        es = async_connections.get_connection(es_conn_part2)
         await es.close()
 
     async def setup(self):
@@ -125,6 +125,8 @@ class ConnectedSystemsTimescaleDBProvider(ConnectedSystemsPart2Provider, Elastic
             async with connection.transaction():
                 for stmnt in statements:
                     await connection.execute(stmnt)
+
+        await Datastream.init()
 
     def get_conformance(self) -> List[str]:
         """Returns the list of conformance classes that are implemented by this provider"""

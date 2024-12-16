@@ -3,14 +3,6 @@ volumes:
     driver: local
   esdata01:
     driver: local
-  kibanadata:
-    driver: local
-  metricbeatdata01:
-    driver: local
-  filebeatdata01:
-    driver: local
-  logstashdata01:
-    driver: local
   postgresdata:
     driver: local
 
@@ -26,23 +18,38 @@ services:
     image: docker.52north.org/sensor-web/cs-api:latest
     build:
       context: ../../../
-      target: hybrid
-    env_file:
-      - .env
-    volumes:
-      - ./openapi-config-csa.yml:/app/openapi-config-csa.yml
-      - ./pygeoapi-config.yml:/app/pygeoapi-config.yml
+    environment:
+      PYTHONUNBUFFERED: 1
+      CSA_SERVER_BIND_HOST: localhost
+      CSA_SERVER_BIND_PORT: 5000
+      CSA_CORS_ALLOW_ORIGIN: "*"
+      #CSA_CORS_ALLOW_CREDENTIALS:
+      #CSA_CORS_ALLOW_METHODS:
+      #CSA_CORS_EXPOSE_HEADERS:
+      #CSA_CORS_MAX_AGE:
+      CSA_DYNAMIC-RESOURCES_CSA-PART1_PROVIDER_HOST: es01
+      CSA_DYNAMIC-RESOURCES_CSA-PART1_PROVIDER_PASSWORD: ${ELASTIC_PASSWORD}
+      CSA_DYNAMIC-RESOURCES_CSA-PART1_PROVIDER_USER: elastic
+      CSA_DYNAMIC-RESOURCES_CSA-PART2_PROVIDER_ELASTIC_HOST: es01
+      CSA_DYNAMIC-RESOURCES_CSA-PART2_PROVIDER_ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+      CSA_DYNAMIC-RESOURCES_CSA-PART2_PROVIDER_ELASTIC_USER: elastic
+      CSA_DYNAMIC-RESOURCES_CSA-PART2_PROVIDER_TIMESCALE_HOST: timescaledb
+      CSA_DYNAMIC-RESOURCES_CSA-PART2_PROVIDER_TIMESCALE_PASSWORD: password
+      CSA_DYNAMIC-RESOURCES_CSA-PART2_PROVIDER_TIMESCALE_USER: timescaledb
     ports:
       - 5000:5000
-    depends_on:
-      es01:
-        condition: service_healthy
-      timescaledb:
-        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", 'sh -c "wget -q -nv --spider http://127.0.0.1:5000/status || exit 1"' ]
+      interval: 15s
+      timeout: 30s
+  #    depends_on:
+  #      es01:
+  #        condition: service_healthy
+  #      timescaledb:
+  #        condition: service_healthy
 
   timescaledb:
     image: timescale/timescaledb-ha:pg16
-    restart: always
     ports:
       - 5432:5432
     environment:
@@ -55,6 +62,8 @@ services:
     volumes:
       - postgresdata:/var/lib/postgresql/data
 
+  # https://www.elastic.co/blog/getting-started-with-the-elastic-stack-and-docker-compose
+  # https://github.com/elkninja/elastic-stack-docker-part-one
   setup:
     image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
     volumes:
@@ -154,7 +163,7 @@ services:
       timeout: 10s
       retries: 120
 
-######  Debugging  ######
+  ######  Debugging  ######
 #  kibana:
 #    depends_on:
 #      es01:

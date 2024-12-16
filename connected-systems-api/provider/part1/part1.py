@@ -16,40 +16,35 @@
 import logging
 import uuid
 from datetime import datetime as DateTime
-import os
-
+from pprint import pprint, pformat
+from typing import Callable, Awaitable, Coroutine
 
 import elasticsearch
 from elasticsearch_dsl import async_connections
 from elasticsearch_dsl.async_connections import connections
 from pygeoapi.provider.base import ProviderGenericError, ProviderItemNotFoundError
 
-from ..connector_elastic import ElasticsearchConnector, ElasticSearchConfig, parse_csa_params, parse_spatial_params, \
+from ..elasticsearch import ElasticsearchConnector, ElasticSearchConfig, parse_csa_params, parse_spatial_params, \
     parse_datetime_params
 from ..definitions import *
 
 LOGGER = logging.getLogger(__name__)
-
-
-# LOGGER.setLevel(level='DEBUG')
+LOGGER.setLevel(level='INFO')
 
 
 class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchConnector):
 
     def __init__(self, provider_def: Dict):
-        """
-        * environment variables superseed provider_def
-        * provider_def is default fallback
-        * LIMITATION: uses the same environment variables like ../part2/timescaledb.py
-          for its elastic search provider
-        """
         super().__init__(provider_def)
         self._es_config = ElasticSearchConfig(
-            hostname=os.getenv('ELASTIC_HOST', provider_def['host']),
-            port=int(os.getenv('ELASTIC_PORT', provider_def['port'])),
-            dbname=os.getenv('ELASTIC_DB', provider_def['dbname']),
-            user=os.getenv('ELASTIC_USER', provider_def['user']),
-            password=os.getenv('ELASTIC_PASSWORD', provider_def['password'])
+            connector_alias=es_conn_part1,
+            hostname=provider_def['host'],
+            port=int(provider_def['port']),
+            dbname=provider_def['dbname'],
+            user=provider_def['user'],
+            password=provider_def['password'],
+            verify_certs=provider_def.get('verify_certs', True),
+            ca_certs=provider_def.get('ca_certs', "")
         )
 
     def get_conformance(self) -> List[str]:
@@ -79,7 +74,7 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchCon
         await self.__create_mandatory_collections()
 
     async def close(self):
-        es = async_connections.get_connection()
+        es = async_connections.get_connection(es_conn_part1)
         await es.close()
 
     async def __create_mandatory_collections(self):
@@ -206,10 +201,10 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchCon
                 c.meta.id = coll["id"]
                 await c.save()
 
-            LOGGER.critical(f"creating mandatory collection {coll['id']}")
+            LOGGER.info(f"creating mandatory collection {coll['id']}")
 
     async def query_collections(self, parameters: CollectionParams) -> CSAGetResponse:
-        query = Collection().search()
+        query = Collection.search()
 
         query = parse_csa_params(query, parameters)
         query = parse_spatial_params(query, parameters)
@@ -269,9 +264,9 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchCon
         query = parse_spatial_params(query, parameters)
 
         if parameters.system is not None:
-            query = query.filter("terms", system=parameters.system)
+            query = query.filter("terms", system_ids=parameters.system)
 
-        return await self.search(query, parameters)
+        return await self.search(query, parameters, ["system_ids"])
 
     async def query_procedures(self, parameters: ProceduresParams) -> CSAGetResponse:
         query = Procedure.search()
@@ -308,17 +303,45 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchCon
 
     async def create(self, type: EntityType, item: Dict) -> CSACrudResponse:
 
+        async def duplicate_identifier(item: Dict, entity: AsyncDocument) -> None:
+            if "id" in item:
+                if await entity.exists(id=entity.id):
+                    raise ProviderInvalidQueryError(user_msg=f"entity with id {entity.id} already exists!")
+
+        pre_hook: List[Callable[[Dict, AsyncDocument], Awaitable[None]]] = [duplicate_identifier]
+        post_hook: List[Callable[[Dict, AsyncDocument], Awaitable[None]]] = []
+
         # Special Handling for some fields
         match type:
             case EntityType.SYSTEMS:
                 # parse date_range fields to es-compatible format
-                self._format_date_range("validTime", item)
-                parent_id = item.get("parent", None)
-                if parent_id and not await System().exists(id=parent_id):
-                    # check that parent exists,
-                    raise ProviderInvalidQueryError(user_msg=f"cannot find parent system with id: {parent_id}")
+                async def check_parent(_: Dict, entity: AsyncDocument) -> None:
+                    self._format_date_range("validTime", entity)
+                    parent_id = getattr(entity, "parent", None)
+                    if parent_id and not await System().exists(id=parent_id):
+                        # check that parent exists,
+                        raise ProviderInvalidQueryError(user_msg=f"cannot find parent system with id: {parent_id}")
+                    return None
+
+                pre_hook.append(check_parent)
                 entity = System(**item)
             case EntityType.DEPLOYMENTS:
+                # parse deployedSystems and possibly link if it is local system identified by urn
+                async def link_system(_: Dict, entity: AsyncDocument) -> None:
+                    entity.system_ids = []
+                    for system in getattr(entity, "deployedSystems", []):
+                        href: str = system["system"]["href"]
+                        if href.startswith("urn"):
+                            query = System().search()
+                            query = query.filter("term", uniqueId=href)
+                            found = await query.source(includes=["_id"]).execute()
+                            if len(found.hits) != 1:
+                                raise ProviderInvalidQueryError(
+                                    user_msg=f"cannot find local system with urn: {href}")
+                            else:
+                                entity.system_ids.append(found.hits.hits[0]._id)
+
+                post_hook.append(link_system)
                 entity = Deployment(**item)
             case EntityType.PROCEDURES:
                 entity = Procedure(**item)
@@ -329,20 +352,19 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchCon
             case _:
                 raise ProviderInvalidQueryError(user_msg=f"unrecognized type {type}")
 
-        if "id" not in item:
-            # We may have to generate id as it is not always required
-            identifier = str(uuid.uuid4())
-            entity.id = identifier
-        else:
-            identifier = item["id"]
-            entity.id = identifier
+        # We may have to generate id as it is not always required
+        identifier = item["id"] if ("id" in item) else str(uuid.uuid4())
+        entity.id = identifier
+        entity.meta.id = identifier
 
         try:
+            for hook in pre_hook:
+                await hook(item, entity)
             entity.meta.id = identifier
-            if await entity.save():
-                return identifier
-            else:
-                raise Exception("cannot save identifier!")
+            await entity.save()
+            for hook in post_hook:
+                await hook(item, entity)
+            return identifier
         except Exception as e:
             raise ProviderInvalidQueryError(user_msg=str(e))
 
@@ -456,9 +478,9 @@ class ConnectedSystemsESProvider(ConnectedSystemsPart1Provider, ElasticsearchCon
         except Exception as e:
             raise ProviderItemNotFoundError(user_msg=f"cannot find {type} with id: {identifier}! {e}")
 
-    def _format_date_range(self, key: str, item: Dict) -> None:
-        if item.get(key):
-            time = item.get(key)
+    def _format_date_range(self, key: str, item: AsyncDocument) -> None:
+        if hasattr(item, key):
+            time = getattr(item, key)
             now = DateTime.now()
             if time[0] == "now":
                 start = now

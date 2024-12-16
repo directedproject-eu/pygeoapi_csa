@@ -1,7 +1,5 @@
 FROM python:3.12-alpine AS base
 
-ARG VERSION 0.1
-
 LABEL maintainer="Jan Speckamp <j.speckamp@52north.org>" \
       org.opencontainers.image.authors="Jan Speckamp <j.speckamp@52north.org>" \
       org.opencontainers.image.url="https://github.com/52North/connected-systems-pygeoapi" \
@@ -29,24 +27,23 @@ RUN pip install -r requirements.txt
 COPY requirements_nodeps.txt .
 RUN pip install --no-deps -r requirements_nodeps.txt
 
-# copy application files
-COPY connected-systems-api connected-systems-api
-COPY docker/examples/hybrid-csa/openapi-config-csa.yml ./connected-systems-api/
-COPY docker/examples/hybrid-csa/pygeoapi-config.yml ./connected-systems-api/
-COPY hypercorn.conf.py .
+CMD ["hypercorn", "-c", "hypercorn.conf.py", "connected-systems-api/app:APP"]
 
-ENV PYGEOAPI_CONFIG=/app/connected-systems-api/pygeoapi-config.yml
-ENV PYGEOAPI_OPENAPI=/app/connected-systems-api/openapi-config-csa.yml
-
-WORKDIR /app/connected-systems-api
-CMD ["sh", "-c", "python setup.py && hypercorn -c ../hypercorn.conf.py app:APP"]
-
-FROM base AS toardb
+#FROM base AS toardb
 # individual requirements for toardb-provider
-COPY requirements_toardb_csa.txt .
-RUN pip install -r requirements_toardb_csa.txt
+#COPY requirements_toardb_csa.txt .
+#RUN pip install -r requirements_toardb_csa.txt
 
-FROM base AS hybrid
+# copy application files
+#COPY connected-systems-api connected-systems-api
+#COPY hypercorn.conf.py .
+
+#FROM base AS hybrid
+FROM base
 # individual requirements for hybrid-provider
 COPY requirements_hybrid_csa.txt .
 RUN pip install -r requirements_hybrid_csa.txt
+
+# copy application files
+COPY connected-systems-api connected-systems-api
+COPY hypercorn.conf.py .

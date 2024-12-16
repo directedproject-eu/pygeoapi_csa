@@ -37,12 +37,13 @@ pip install -r requirements_toardb_csa.txt
 pip install -r requirements_elasticsearch_csa.txt
 ```
 
-The application can then be started via
+If additional providers are used, e.g. for serving a `STAC` interface in parallel to Connected-Systems, additional
+dependencies may be necessary depending on the used underlying provider.
+
+The application can then be started from the root directory via
 
 ```commandline
-PYGEOAPI_CONFIG=<path-to-pygeoapi-config.yml> \
-PYGEOAPI_OPENAPI=<path-to-openapi-config-csa.yml> \
-python3 connected-systems-api/flask_app.py
+python3 connected-systems-api/app.py 
 ```
 
 ### devcontainer
@@ -56,37 +57,11 @@ Remember to rebuild the containers, if any other example set-up from `docker/exa
 
 You can insert example data into your running instance (`url_stub`) by using the [simulator](./tools/simulator/simulator.py).
 Ensure to set-up your python environment accordingly and install the [required dependencies](./tools/simulator/requirements.txt) in your simulator env.
-You can limit the amount of observations (`num_of_obs_to_insert`) being inserted in the `simulator.py`
+You can limit the amount of observations (`num_of_obs_to_insert`) being inserted in the `simlutor.py`
 
 ## Usage
 
 The API is accessible at `<host>:5000` and provides a HTML landing page for easy navigation.
-
-### Configuration
-
-The default configuration is done by the two configuration files:
-
-* `openapi-config-csa.yml`
-* `pygeoapi-config.yml`
-
-The providers implementing part 1 and 2 of the specification are currently using [timescaledb](https://github.com/timescale/timescaledb) and [elastic search](https://github.com/elastic/elasticsearch).
-The configuration of these backend services can be achieved by providing the according values in the `pygeoapi-config.yml` or via environment variables as outlined in the following list.
-The values provided via environment variables supersede the `pygeoapi-config.yml` values.
-The current implementation allows only the use of **one** elastic search cluster, when providing the configuration via environment variables.
-
-* **Elastic Search Cluster**
-  * `ELASTIC_HOST`
-  * `ELASTIC_PORT`
-  * `ELASTIC_DB`
-  * `ELASTIC_USER`
-  * `ELASTIC_PASSWORD`
-
-* **TimescaleDB**
-  * `TIMESCALEDB_HOST`
-  * `TIMESCALEDB_PORT`
-  * `TIMESCALEDB_DB`
-  * `TIMESCALEDB_USER`
-  * `TIMESCALEDB_PASSWORD`
 
 ## License
 

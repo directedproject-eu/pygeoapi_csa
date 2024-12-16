@@ -1,6 +1,9 @@
+import copy
 import json
 import json
 import logging
+from dataclasses import field
+from pprint import pformat
 from typing import Union
 
 from elastic_transport import NodeConfig
@@ -11,7 +14,7 @@ from pygeoapi.provider.base import ProviderConnectionError, ProviderItemNotFound
 from .definitions import *
 
 LOGGER = logging.getLogger(__name__)
-LOGGER.setLevel('DEBUG')
+LOGGER.setLevel('INFO')
 
 
 def parse_datetime_params(query: AsyncSearch, parameters: DatetimeParam) -> AsyncSearch:
@@ -75,27 +78,37 @@ class ElasticSearchConfig:
     hostname: str
     port: int
     user: str
-    password: str
     dbname: str
+    verify_certs: bool
+    ca_certs: Optional[str]
+    password: str = field(repr=False)
+    connector_alias: str = field(repr=False)
+    password_censored: str = "***********"
 
 
 class ElasticsearchConnector:
 
     async def connect_elasticsearch(self, config: ElasticSearchConfig) -> None:
+        LOGGER.info(f"""
+            ====== Connecting to ES with configuration ====== 
+                {pformat(config)}
+            """)
+
         LOGGER.debug(f'Connecting to Elasticsearch at: https://{config.hostname}:{config.port}/{config.dbname}')
         try:
             connections.create_connection(
+                alias=config.connector_alias,
                 hosts=[NodeConfig(
                     scheme="https",
                     host=config.hostname,
                     port=config.port,
-                    verify_certs=False,
-                    ca_certs=None,
-                    ssl_show_warn=False,
+                    verify_certs=config.verify_certs,
+                    ca_certs=config.ca_certs if config.verify_certs else None,
+                    ssl_show_warn=True,
                 )],
                 timeout=20,
                 http_auth=(config.user, config.password),
-                verify_certs=False)
+                verify_certs=config.verify_certs)
         except Exception as e:
             msg = f'Cannot connect to Elasticsearch: {e}'
             LOGGER.critical(msg)
@@ -114,7 +127,7 @@ class ElasticsearchConnector:
             excludes = []
         LOGGER.debug(json.dumps(query.to_dict(), indent=True, default=str))
 
-        found = (await query.source(excludes=excludes)[parameters.offset:parameters.offset+parameters.limit]
+        found = (await query.source(excludes=excludes)[parameters.offset:parameters.offset + parameters.limit]
                  .execute()).hits
 
         count = found.total.value

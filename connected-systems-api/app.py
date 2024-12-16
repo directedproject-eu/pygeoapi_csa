@@ -13,84 +13,114 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # =================================================================
-import inspect
 import os.path
+import secrets
 
-config = os.getenv("PYGEOAPI_CONFIG", "./pygeoapi-config.yml")
-oiconfig = os.getenv("PYGEOAPI_OPENAPI", "./openapi-config-csa.yml")
-os.environ["PYGEOAPI_CONFIG"] = config
-os.environ["PYGEOAPI_OPENAPI"] = oiconfig
-
-from quart import Quart, request, Request, make_response, send_from_directory
-from pygeoapi import flask_app
-from pygeoapi.flask_app import API_RULES, CONFIG, api_, OPENAPI
+from pygeoapi import static
+from quart import request, send_from_directory
+from quart_auth import basic_auth_required
 from quart_cors import cors
-from werkzeug.datastructures import MultiDict
 
 from api import *
-from routes.edr import edr
-from routes.stac import stac
 from routes.collections import collections
 from routes.coverages import coverage
 from routes.csa import csa
+from routes.edr import edr
 from routes.processes import oapip
-
-
-# makes request args modifiable
-class ModifiableRequest(Request):
-    dict_storage_class = MultiDict
-    parameter_storage_class = MultiDict
-
-
-class CustomQuart(Quart):
-    request_class = ModifiableRequest
-
+from routes.stac import stac
 
 APP = CustomQuart(__name__,
-                  static_folder=os.path.join(os.path.dirname(inspect.getmodule(api_).__file__), "static"),
+                  static_folder=static.__path__._path[0],
                   static_url_path='/static')
+APP.metrics = AppState(version="0.1")
 
-APP.config['QUART_CORS_ALLOW_ORIGIN'] = os.environ.get("CORS_ALLOW_ORIGIN") or ""
-APP.config['QUART_CORS_ALLOW_CREDENTIALS'] = os.environ.get("CORS_ALLOW_CREDENTIALS")
-APP.config['QUART_CORS_ALLOW_METHODS'] = os.environ.get("CORS_ALLOW_METHODS")
-APP.config['QUART_CORS_ALLOW_HEADERS'] = os.environ.get("CORS_ALLOW_HEADERS")
-APP.config['QUART_CORS_EXPOSE_HEADERS'] = os.environ.get("CORS_EXPOSE_HEADERS")
-APP.config['QUART_CORS_MAX_AGE'] = os.environ.get("CORS_MAX_AGE")
+APP.config['QUART_CORS_ALLOW_ORIGIN'] = os.environ.get("CSA_CORS_ALLOW_ORIGIN") or ""
+APP.config['QUART_CORS_ALLOW_CREDENTIALS'] = os.environ.get("CSA_CORS_ALLOW_CREDENTIALS")
+APP.config['QUART_CORS_ALLOW_METHODS'] = os.environ.get("CSA_CORS_ALLOW_METHODS")
+APP.config['QUART_CORS_ALLOW_HEADERS'] = os.environ.get("CSA_CORS_ALLOW_HEADERS")
+APP.config['QUART_CORS_EXPOSE_HEADERS'] = os.environ.get("CSA_CORS_EXPOSE_HEADERS")
+APP.config['QUART_CORS_MAX_AGE'] = os.environ.get("CSA_CORS_MAX_AGE")
 
 APP = cors(APP)
 
-APP.url_map.strict_slashes = API_RULES.strict_slashes
+APP.url_map.strict_slashes = False
 APP.config['JSONIFY_PRETTYPRINT_REGULAR'] = CONFIG['server'].get('pretty_print', False)
 
-APP.register_blueprint(csa)
+if os.getenv("QUART_AUTH_BASIC", True):
 
-# TODO: make this configurable, only import required/configured
-APP.register_blueprint(edr)
-APP.register_blueprint(stac)
-APP.register_blueprint(oapip)
-APP.register_blueprint(coverage)
-APP.register_blueprint(collections)
+    if (os.getenv("QUART_AUTH_BASIC_USERNAME") is None or os.getenv("QUART_AUTH_BASIC_PASSWORD") is None):
+        APP.metrics.state = State.ERROR
+        APP.config["QUART_AUTH_BASIC_USERNAME"] = secrets.token_hex()
+        APP.config["QUART_AUTH_BASIC_PASSWORD"] = secrets.token_hex()
+        LOGGER.critical(f"QUART_AUTH_BASIC is set but no credentials are provided!")
+    else:
+        APP.metrics.state = State.STARTING
+        APP.config["QUART_AUTH_BASIC_USERNAME"] = os.getenv("QUART_AUTH_BASIC_PASSWORD")
+        APP.config["QUART_AUTH_BASIC_PASSWORD"] = os.getenv("QUART_AUTH_BASIC_USERNAME")
 
 
-@APP.route('/')
+    @csa.before_request
+    @basic_auth_required()
+    async def is_auth():
+        # Auth is handled by @basic_auth_required wrapper already
+        return None
+
+
+    @collections.before_request
+    @basic_auth_required()
+    async def is_auth():
+        # Auth is handled by @basic_auth_required wrapper already
+        return None
+
+if APP.metrics.state == State.STARTING:
+    APP.register_blueprint(csa)
+
+    # TODO: make this configurable, only import required/configured
+    APP.register_blueprint(edr)
+    APP.register_blueprint(stac)
+    APP.register_blueprint(oapip)
+    APP.register_blueprint(coverage)
+    APP.register_blueprint(collections)
+
+
+@APP.get('/')
 async def landing_page():
     request.collection = ""
     return await to_response(await csapi_.landing(request))
 
 
-@APP.route('/assets/<path:filename>')
+@APP.get('/metrics')
+async def metrics():
+    headers = {"Content-Type": "text/plain"}
+    return await make_response(str(APP.metrics), headers)
+
+
+@APP.get('/status')
+async def status():
+    match APP.metrics.state.value:
+        case State.RUNNING:
+            code = HTTPStatus.OK
+        case _:
+            code = HTTPStatus.INTERNAL_SERVER_ERROR
+
+    return await make_response("", code)
+
+
+@APP.get('/assets/<path:filename>')
 async def assets(filename):
     request.collection = None
-    return await send_from_directory("templates/connected-systems/assets", filename)
+    abspath = os.path.join(os.path.dirname(__file__), "templates/connected-systems/assets")
+    return await send_from_directory(abspath, filename)
 
 
-@APP.route('/openapi')
-def openapi():
+@APP.get('/openapi')
+async def openapi():
+    from pygeoapi import flask_app
     request.collection = None
     return flask_app.openapi()
 
 
-@APP.route('/conformance')
+@APP.get('/conformance')
 async def conformance():
     request.collection = None
     return await to_response(await csapi_.conformance(request))
@@ -99,10 +129,19 @@ async def conformance():
 @APP.before_serving
 async def init_db():
     """ Initialize persistent database/provider connections """
-    if csapi_.provider_part1:
-        await csapi_.provider_part1.open()
-    if csapi_.provider_part2:
-        await csapi_.provider_part2.open()
+    try:
+        if csapi_.provider_part1:
+            await csapi_.provider_part1.open()
+            await csapi_.provider_part1.setup()
+        if csapi_.provider_part2:
+            await csapi_.provider_part2.open()
+            await csapi_.provider_part2.setup()
+    except Exception as e:
+        LOGGER.error(e)
+        APP.metrics.state = State.ERROR
+        return
+
+    APP.metrics.state = State.RUNNING
 
 
 @APP.after_serving
@@ -114,12 +153,19 @@ async def close_db():
         await csapi_.provider_part2.close()
 
 
-def run():
-    ## Only used in local development - hypercorn is used for production
-    APP.run(debug=True,
-            host=api_.config['server']['bind']['host'],
-            port=api_.config['server']['bind']['port'])
-
-
 if __name__ == "__main__":
-    run()
+    for _ in range(5):
+        LOGGER.critical("!!! RUNNING IN DEBUG MODE !!! ")
+
+    if not os.getenv("QUART_AUTH_BASIC_USERNAME"):
+        name = secrets.token_hex()
+        APP.config["QUART_AUTH_BASIC_USERNAME"] = name
+        LOGGER.critical(f"QUART_AUTH_BASIC is set but no credentials are provided! generating username: {name}")
+    if not os.getenv("QUART_AUTH_BASIC_PASSWORD"):
+        pwd = secrets.token_hex()
+        APP.config["QUART_AUTH_BASIC_PASSWORD"] = pwd
+        LOGGER.critical(f"QUART_AUTH_BASIC is set but no credentials are provided! generating password: {pwd}")
+
+    """ Initialize peristent database/provider connections """
+    APP.metrics.mode = AppMode.DEV
+    APP.run(debug=True, host="localhost", port=5000)

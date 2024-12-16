@@ -18,32 +18,98 @@ import pathlib
 from http import HTTPMethod
 
 import jsonschema
-from jsonschema import validate
+import orjson
+from jsonschema.protocols import Validator
+from jsonschema.validators import Draft7Validator
 from pygeoapi.api import *
-from pygeoapi.flask_app import CONFIG, OPENAPI
+from pygeoapi.config import get_config
+from pygeoapi.openapi import load_openapi_document
 from pygeoapi.provider.base import ProviderItemNotFoundError
-from pygeoapi.util import render_j2_template, to_json
+from pygeoapi.util import render_j2_template
 
 from meta import CSMeta
 from provider.definitions import *
 from util import *
 
+LOGGER = logging.getLogger(__name__)
+LOGGER.setLevel('DEBUG')
 
-package_dir = pathlib.Path(__file__).parent
+
+class SchemaValidator:
+    system_validator: Validator
+    deployment_validator: Validator
+    procedure_validator: Validator
+    feature_validator: Validator
+    property_validator: Validator
+    datastream_validator: Validator
+    observation_validator: Validator
+
+    def __init__(self):
+        package_dir = pathlib.Path(__file__).parent
+        for prop, loc in [("system_validator", "schemas/connected-systems/system.schema"),
+                          ("procedure_validator", "schemas/connected-systems/procedure.schema"),
+                          ("property_validator", "schemas/connected-systems/property.schema"),
+                          ("feature_validator", "schemas/connected-systems/samplingFeature.schema"),
+                          ("deployment_validator", "schemas/connected-systems/deployment.schema"),
+                          ("datastream_validator", "schemas/connected-systems/datastream.schema"),
+                          ("observation_validator", "schemas/connected-systems/observation.schema")]:
+            with open(os.path.join(package_dir, loc), 'r') as definition:
+                setattr(self, prop, Draft7Validator(json.load(definition)))
+
+    def validate(self, collection: EntityType, instance: any) -> None:
+        match collection:
+            case EntityType.SYSTEMS:
+                return self.system_validator.validate(instance)
+            case EntityType.DEPLOYMENTS:
+                return self.deployment_validator.validate(instance)
+            case EntityType.PROCEDURES:
+                return self.procedure_validator.validate(instance)
+            case EntityType.SAMPLING_FEATURES:
+                return self.feature_validator.validate(instance)
+            case EntityType.PROPERTIES:
+                return self.property_validator.validate(instance)
+            case EntityType.DATASTREAMS:
+                return self.datastream_validator.validate(instance)
+            case EntityType.OBSERVATIONS:
+                return self.observation_validator.validate(instance)
 
 
 class CSAPI(CSMeta):
     """
         API Object implementing OGC API Connected Systems
     """
-    csa_schemas = {}
+    validator = SchemaValidator()
     strict_validation = True
 
-    def __init__(self, config, openapi):
+    def __init__(self, config: Dict, openapi: Dict):
+        # Allow for configuration using environment variables that overwrite values from the provided config
+        for key, val in os.environ.items():
+            if key.startswith("CSA_"):
+                # resolve key to config property
+                # config properties may include underscored encoded as __
+                path = []
+                for e in key.replace("__", "||").split("_"):
+                    path.append(e.replace("||", "_"))
+                node = config
+                for subpath in path[1:-1]:
+                    subpath = subpath.lower()
+                    if subpath.lower() in node:
+                        # descend
+                        node = node.get(subpath)
+                    else:
+                        # key does not exist in the config yet. create it
+                        node[subpath] = {}
+
+                LOGGER.debug(f"Overwriting property with env value: {path} --> {val}")
+                node[path[-1].lower()] = val
+
         super().__init__(config, openapi)
 
         if config['dynamic-resources'] is not None:
-            api_part1 = config['dynamic-resources'].get('connected-systems-api-part1', None)
+            api_part1 = None
+            for resource in config['dynamic-resources']:
+                if config['dynamic-resources'][resource].get('type') == "connected-systems-part1":
+                    api_part1 = config['dynamic-resources'][resource]
             if api_part1 is not None:
                 provider_definition = api_part1['provider']
                 provider_definition["base_url"] = self.base_url
@@ -55,17 +121,10 @@ class CSAPI(CSMeta):
                 if self.config.get('resources') is None:
                     self.config['resources'] = {}
 
-                # TODO: refresh this upon modification of the datastore (e.g. adding new collections)
-                for name, location in [(EntityType.SYSTEMS, "schemas/connected-systems/system.schema"),
-                                       (EntityType.PROCEDURES, "schemas/connected-systems/procedure.schema"),
-                                       (EntityType.PROPERTIES, "schemas/connected-systems/property.schema"),
-                                       (EntityType.SAMPLING_FEATURES,
-                                        "schemas/connected-systems/samplingFeature.schema"),
-                                       (EntityType.DEPLOYMENTS, "schemas/connected-systems/deployment.schema")]:
-                    with open(os.path.join(package_dir, location), 'r') as definition:
-                        self.csa_schemas[name] = json.load(definition)
-            api_part2 = config['dynamic-resources'].get('connected-systems-api-part2', None)
-
+            api_part2 = None
+            for resource in config['dynamic-resources']:
+                if config['dynamic-resources'][resource].get('type') == "connected-systems-part2":
+                    api_part2 = config['dynamic-resources'][resource]
             if api_part2 is not None:
                 provider_definition = api_part2['provider']
                 provider_definition["base_url"] = self.base_url
@@ -73,12 +132,6 @@ class CSAPI(CSMeta):
 
                 if self.config.get('resources') is None:
                     self.config['resources'] = {}
-
-                for name, location in [
-                    (EntityType.DATASTREAMS, "schemas/connected-systems/datastream.schema"),
-                    (EntityType.OBSERVATIONS, "schemas/connected-systems/observation.schema")]:
-                    with open(os.path.join(package_dir, location), 'r') as definition:
-                        self.csa_schemas[name] = json.load(definition)
 
     @parse_request
     @jsonldify
@@ -95,7 +148,7 @@ class CSAPI(CSMeta):
         if template[1] == HTTPStatus.NOT_FOUND:
             fcm = {"collections": [], "links": []}
         else:
-            fcm = json.loads(template[2])
+            fcm = orjson.loads(template[2])
 
         # query collections
         data = None
@@ -117,7 +170,7 @@ class CSAPI(CSMeta):
         if data:
             if collection_id is not None:
                 headers["Content-Type"] = "application/json"
-                return headers, HTTPStatus.OK, to_json(data[0][0], self.pretty_print)
+                return headers, HTTPStatus.OK, orjson.dumps(data[0][0])
             else:
                 fcm['collections'].extend(data[0])
                 if original_format == F_HTML:  # render
@@ -130,9 +183,9 @@ class CSAPI(CSMeta):
                     return headers, HTTPStatus.OK, content
                 else:
                     headers["Content-Type"] = "application/json"
-                    return headers, HTTPStatus.OK, to_json(fcm, self.pretty_print)
+                    return headers, HTTPStatus.OK, orjson.dumps(fcm)
 
-        return headers, HTTPStatus.OK, to_json(fcm, self.pretty_print)
+        return headers, HTTPStatus.OK, orjson.dumps(fcm)
 
     @parse_request
     async def get_collection_items(self, request: AsyncAPIRequest, collection_id: str, item_id: str) -> APIResponse:
@@ -314,22 +367,31 @@ class CSAPI(CSMeta):
             provider = self.provider_part1
 
         headers = request.get_response_headers(**self.api_headers)
-        entity = json.loads(request.data)
-
-        # Validate against json schema if required
+        try:
+            entity = orjson.loads(request.data)
+        except json.decoder.JSONDecodeError as ex:
+            return self.get_exception(
+                HTTPStatus.BAD_REQUEST,
+                headers,
+                request.format,
+                'InvalidParameterValue',
+                ex.args)
+        # Validate against json schema if possible+required
+        # must be turned off when PATCHing
         # may be turned off for increased performance
         if shall_validate:
-            schema = self.csa_schemas[collection]
             try:
-                validate(instance=entity, schema=schema)
-
+                self.validator.validate(collection, entity)
             except jsonschema.exceptions.ValidationError as ex:
                 return self.get_exception(
                     HTTPStatus.BAD_REQUEST,
                     headers,
                     request.format,
                     'InvalidParameterValue',
-                    ex.message)
+                    {
+                        "message": ex.message,
+                        "context": [e.message for e in ex.context]
+                    })
         # remove additional fields that cannot be set using POST/PUT but only through Path but pass validation
         if "parent" in entity:
             return self.get_exception(
@@ -354,7 +416,8 @@ class CSAPI(CSMeta):
                 case _:
                     raise Exception(f"unrecognized HTTMethod {method}")
 
-            return headers, HTTPStatus.NO_CONTENT, to_json(await response, self.pretty_print)
+            result = await response
+            return headers, HTTPStatus.CREATED, orjson.dumps(result)
         except Exception as ex:
             return self.get_exception(
                 HTTPStatus.BAD_REQUEST,
@@ -410,8 +473,9 @@ class CSAPI(CSMeta):
                 "href": "?f=application/json"
             }
         ]
+        path = os.path.join(os.path.dirname(__file__), "templates/connected-systems/viewer.html")
         content = render_j2_template(self.tpl_config,
-                                     'templates/connected-systems/viewer.html',
+                                     path,
                                      data,
                                      request.locale)
         return headers, HTTPStatus.OK, content
@@ -426,20 +490,27 @@ class CSAPI(CSMeta):
                     "features": [item for item in data[0]],
                     "links": [link for link in data[1]],
                 } if is_collection else data[0][0]
-                return headers, HTTPStatus.OK, to_json(response, self.pretty_print)
+                return headers, HTTPStatus.OK, orjson.dumps(response)
             case _:
                 response = {
                     "items": [item for item in data[0]],
                     "links": [link for link in data[1]],
                 } if is_collection else data[0][0]
 
-                return headers, HTTPStatus.OK, to_json(response, self.pretty_print)
+                return headers, HTTPStatus.OK, orjson.dumps(response)
 
 
-PLUGINS["provider"]["toardb"] = "provider.toardb_csa.ToarDBProvider"
 PLUGINS["provider"]["ElasticSearchConnectedSystems"] = \
-    "provider.part1.elasticsearch.ConnectedSystemsESProvider"
+    "provider.part1.part1.ConnectedSystemsESProvider"
 PLUGINS["provider"]["TimescaleDBConnectedSystems"] = \
-    "provider.part2.timescaledb.ConnectedSystemsTimescaleDBProvider"
+    "provider.part2.part2.ConnectedSystemsTimescaleDBProvider"
+
+if not os.getenv("PYGEOAPI_CONFIG"):
+    os.environ["PYGEOAPI_CONFIG"] = os.path.join(os.path.dirname(__file__), "default-config.yml")
+if not os.getenv("PYGEOAPI_OPENAPI"):
+    os.environ["PYGEOAPI_OPENAPI"] = os.path.join(os.path.dirname(__file__), "default-openapi.yml")
+
+CONFIG = get_config()
+OPENAPI = load_openapi_document()
 
 csapi_ = CSAPI(CONFIG, OPENAPI)
