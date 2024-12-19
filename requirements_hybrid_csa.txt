@@ -1,5 +1,4 @@
 aiohttp
-asyncpg
 elasticsearch
 elasticsearch-dsl
-
+asyncpg

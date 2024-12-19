@@ -1,4 +1,3 @@
-# https://packaging.python.org/en/latest/specifications/version-specifiers/#id5
 Babel
 requests
 jsonschema
@@ -8,12 +7,12 @@ pygeofilter
 pyproj
 python-dateutil
 pyyaml
-requests~=2.32
-rtree
-setuptools~=70.0
+filelock
+setuptools
+hypercorn[uvloop]
 shapely~=2.0.4-r0
+rtree
 tqdm
-urllib3~=1.26.15
 
 quart
 quart-cors
