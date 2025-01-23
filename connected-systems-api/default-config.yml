@@ -71,8 +71,8 @@ dynamic-resources:
       host: localhost
       port: 9200
       dbname: csa
-      user: elastic
-      password: password
+      # user: elastic
+      # password: password
       verify_certs: False   # True if ES certificates are to be validated. Default 'true'
       ca_certs: ""   # Path to PEM-encoded Certificate of ES
 
