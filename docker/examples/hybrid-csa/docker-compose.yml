@@ -59,6 +59,9 @@ services:
       POSTGRES_PASSWORD: password
       ALLOW_IP_RANGE: 0.0.0.0/0
       POSTGRES_MULTIPLE_EXTENSIONS: postgis
+    healthcheck:
+      test: [
+        "CMD-SHELL", '/bin/sh -c exec pg_isready -U "$POSTGRES_USER" -h 127.0.0.1 -p 5432 --dbname="$POSTGRES_DB"' ]
     volumes:
       - postgresdata:/var/lib/postgresql/data
 
