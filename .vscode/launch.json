@@ -13,7 +13,14 @@
             "cwd": "${workspaceFolder}/connected-systems-api",
             "env": {
                 "PYGEOAPI_CONFIG": "./default-config.yml",
-                "PYGEOAPI_OPENAPI": "./default-openapi.yml"
+                "PYGEOAPI_OPENAPI": "./default-openapi.yml",
+                "FOO_DYNAMIC-RESOURCES_CSA-PART2_PROVIDER_ELASTIC_USER": "elastic",
+                "FOO_DYNAMIC-RESOURCES_CSA-PART2_PROVIDER_ELASTIC_PASSWORD": "password",
+                "CSA_ES_PORT_9200_TCP": "tcp://10.52.44.4:9200",
+                "CSA_ES_PORT_9200_TCP_PORT": "9200",
+                "CONFIG_PREFIX": "FOO_",
+                "QUART_AUTH_BASIC_USERNAME": "csa",
+                "QUART_AUTH_BASIC_PASSWORD": "csa"
             }
         }
     ]
